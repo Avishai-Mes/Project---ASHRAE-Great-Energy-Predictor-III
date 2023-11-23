@@ -1,0 +1,5 @@
+"0","```r
+movies_ff$drop <- ifelse(movies_ff_na_sum$pct >= 0.5,1,0)  # new temp column
+movies_ff <- movies_ff %>% filter(movies_ff$drop==0)
+movies_ff$drop <- NULL
+```"

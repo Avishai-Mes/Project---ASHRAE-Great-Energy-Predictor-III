@@ -1,0 +1,96 @@
+"0","```python
+import pandas as pd
+import numpy as np
+import fancyimpute
+
+# import the checkpoint
+movies_ff = pd.read_csv(\"./csv files/movies_ff_p.csv\")
+
+\"\"\"
+create a dataframe with the columns won't be used durning the 'KNN' process.
+Those coulmns will be the ones contain a string, since 'KNN' doesn't accept 
+strings. 'movie_id' column won't be used either, since it's an index column, and 
+will generate wrong conclusions for the 'KNN' process.
+\"\"\"
+```"
+"1","\"\ncreate a dataframe with the columns won't be used durning the 'KNN' process.\nThose coulmns will be the ones contain a string, since 'KNN' doesn't accept \nstrings. 'movie_id' column won't be used either, since it's an index column, and \nwill generate wrong conclusions for the 'KNN' process.\n\"
+"
+"0","```python
+str_cols = ['movie_id','original_language','release_date', 'runtime_cat']
+mnar_cols = [\"actor1_prev_revenue\", \"actor2_prev_revenue\", \"actor0_prev_revenue\", 
+    \"producers_5y_cnt\", \"producers_cnt\", \"producers_5y_revenue\", 
+    \"actors_5y_revenue\", \"depart_Directing_ratio\", \"director_movies_cnt\", 
+    \"actor2_movies_cnt\", \"actor0_movies_3y_cnt\", \"depart_Directing\", 
+    \"actor1_movies_3y_cnt\", \"depart_Crew_ratio\", \"depart_Writing_ratio\",   
+    \"sw_female_actor0\", \"sw_male_actor0\"]
+tot_str_cols = str_cols + mnar_cols
+movies_ff_strings = movies_ff[tot_str_cols]
+
+\"\"\"
+'select_dtypes' function is used to select all the columns in movies_ff
+that have the same dtype as the ones mentioned in the parameter \"numerics\".
+Lastly, \"movie_id\" is removed for the reason stated above.
+output -> movies_ff_numeric: only numeric columns of movies_ff excluding 
+'movie_id'. Then 'KNN' process will be operated, using the 'argpartition' 
+criteria, meaning \"fill the NA using the most occured value\".A numpy matrix is 
+received and then all values are rounded, using np.round() - since whole values 
+is needed. Result is stored in \"movies_ff_knn\".
+\"\"\"
+```"
+"1","'\n\'select_dtypes\' function is used to select all the columns in movies_ff\nthat have the same dtype as the ones mentioned in the parameter \"numerics\".\nLastly, \"movie_id\" is removed for the reason stated above.\noutput -> movies_ff_numeric: only numeric columns of movies_ff excluding \n\'movie_id\'. Then \'KNN\' process will be operated, using the \'argpartition\' \ncriteria, meaning \"fill the NA using the most occured value\".A numpy matrix is \nreceived and then all values are rounded, using np.round() - since whole values \nis needed. Result is stored in \"movies_ff_knn\".\n'
+"
+"0","```python
+numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
+movies_ff_numeric = movies_ff.select_dtypes(include=numerics)
+movies_ff_numeric = movies_ff_numeric.drop(columns=['movie_id'])
+movies_ff_knn = np.round(fancyimpute.KNN(5, use_argpartition=True).fit_transform (movies_ff_numeric), 2)
+```"
+"1","Imputing row 1/2996 with 0 missing, elapsed time: 6.800
+Imputing row 101/2996 with 2 missing, elapsed time: 6.806
+Imputing row 201/2996 with 0 missing, elapsed time: 6.811
+Imputing row 301/2996 with 2 missing, elapsed time: 6.816
+Imputing row 401/2996 with 0 missing, elapsed time: 6.835
+Imputing row 501/2996 with 0 missing, elapsed time: 6.843
+Imputing row 601/2996 with 3 missing, elapsed time: 6.846
+Imputing row 701/2996 with 0 missing, elapsed time: 6.850
+Imputing row 801/2996 with 1 missing, elapsed time: 6.855
+Imputing row 901/2996 with 1 missing, elapsed time: 6.864
+Imputing row 1001/2996 with 0 missing, elapsed time: 6.869
+Imputing row 1101/2996 with 1 missing, elapsed time: 6.875
+Imputing row 1201/2996 with 1 missing, elapsed time: 6.883
+Imputing row 1301/2996 with 0 missing, elapsed time: 6.890
+Imputing row 1401/2996 with 0 missing, elapsed time: 6.894
+Imputing row 1501/2996 with 0 missing, elapsed time: 6.899
+Imputing row 1601/2996 with 0 missing, elapsed time: 6.910
+Imputing row 1701/2996 with 0 missing, elapsed time: 6.915
+Imputing row 1801/2996 with 0 missing, elapsed time: 6.922
+Imputing row 1901/2996 with 1 missing, elapsed time: 6.926
+Imputing row 2001/2996 with 0 missing, elapsed time: 6.933
+Imputing row 2101/2996 with 0 missing, elapsed time: 6.938
+Imputing row 2201/2996 with 1 missing, elapsed time: 6.944
+Imputing row 2301/2996 with 0 missing, elapsed time: 6.947
+Imputing row 2401/2996 with 5 missing, elapsed time: 6.951
+Imputing row 2501/2996 with 0 missing, elapsed time: 6.958
+Imputing row 2601/2996 with 0 missing, elapsed time: 6.962
+Imputing row 2701/2996 with 0 missing, elapsed time: 6.970
+Imputing row 2801/2996 with 0 missing, elapsed time: 6.979
+Imputing row 2901/2996 with 0 missing, elapsed time: 6.988
+"
+"0","```python
+\"\"\"
+The matrix will be input into a dataframe, as it was before.
+The imputed columns will be combined, with those of 'movies_ff_strings' in order 
+to get back the complete dataset we had before splitting the columns.
+'pd.concat()' function concatenates a list of dataframes on a certain axis. 
+axis=1 means: combines the dataframes on the column axis.
+Lastly, another checkpoint will be stored 
+function.
+\"\"\"
+```"
+"1","\"\nThe matrix will be input into a dataframe, as it was before.\nThe imputed columns will be combined, with those of 'movies_ff_strings' in order \nto get back the complete dataset we had before splitting the columns.\n'pd.concat()' function concatenates a list of dataframes on a certain axis. \naxis=1 means: combines the dataframes on the column axis.\nLastly, another checkpoint will be stored \nfunction.\n\"
+"
+"0","```python
+movies_ff_knn = pd.DataFrame(movies_ff_knn,columns=movies_ff_numeric.columns)
+movies_ff = pd.concat([movies_ff_strings, movies_ff_knn], axis=1)
+pd.DataFrame.to_csv(movies_ff,index=False,path_or_buf='./csv files/movies_ff_after_impute.csv')
+```"

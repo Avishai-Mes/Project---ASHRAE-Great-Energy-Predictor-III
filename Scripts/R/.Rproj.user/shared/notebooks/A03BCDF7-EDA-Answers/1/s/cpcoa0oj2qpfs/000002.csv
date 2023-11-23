@@ -1,0 +1,11 @@
+"0","```r
+pdf(\"./Graphs-after completion of data cleansing/Heatmap Missing Percentage Graph.pdf\")
+options(repr.plot.width = 25, repr.plot.height = 25)
+vis_miss(movies_ff)+ theme(plot.title = element_text(size = 10), 
+                           axis.text.x = element_text(size = 5, angle=90), 
+                           axis.title.y = element_blank())
+dev.off()
+```"
+"1","null device 
+          1 
+"

@@ -1,0 +1,25 @@
+"0","```r
+# examination of missingness mechanism using 'glm'
+
+res <- NULL
+for(m in mm$missingness$var) {
+  ff <- movies_ff[, numlst]
+  # change the current examined variable with the missing indicator for this variable
+  ff[[m]] <- movies_ff_na[[m]]
+  mod <- glm(ff[[m]] ~.,data=ff,family=\"binomial\")
+  sm <- summary(mod)
+  if(is.null(sm)==F) {  # a check
+    sm2 <- data.frame(var=row.names(sm$coefficients),pvalue=sm$coefficients[,4])
+    res <- rbind(res, cbind(m,sm2))
+    # append(res, sm, m)
+  } else {
+    print(sm)
+  }
+}
+```"
+"1","Warning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not convergeWarning: glm.fit: algorithm did not converge
+"
+"0","```r
+row.names(res) <- NULL
+res
+```"

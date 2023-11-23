@@ -1,0 +1,129 @@
+                            
+                                   ------------------------------------------------------------------------------
+                                   ---  Generation of 'train_p', 'building_metadate_p' and 'weather_train_p'  ---
+                                   ------------------------------------------------------------------------------
+
+
+/* In this script I will create 'train_p', 'building_metadate_p' and 'weather_train_p' based on 'train', 'building_metadate' and 'weather_train'.
+   These tables will be later processed and be joined to create the final flat file - 'ff_train_agg' */
+
+   
+
+/* At 'train': 1. Filteriמg out meter types other than '1' (chilled water).
+               2. Adding and dropping columns. */
+CREATE TABLE train_p AS
+SELECT building_id, timestamp, ROUND(meter_reading, 2) AS meter_reading
+FROM train
+WHERE meter = 1 AND meter_reading != 0
+ORDER BY building_id, timestamp;
+
+-- Feature Engineering
+ALTER TABLE train_p ADD COLUMN date DATE;
+ALTER TABLE train_p ADD COLUMN time_range INTEGER; 
+ALTER TABLE train_p ADD COLUMN time_range_x REAL; 
+ALTER TABLE train_p ADD COLUMN time_range_y REAL; 
+
+UPDATE train_p SET date = date(timestamp);
+UPDATE train_p SET time_range = CASE WHEN strftime('%H', timestamp) >= '00' AND strftime('%H', timestamp) <= '07' THEN 1
+                                     WHEN strftime('%H', timestamp) >= '08' AND strftime('%H', timestamp) <= '15' THEN 2
+                                     ELSE 3 END;
+UPDATE train_p SET time_range_x = ROUND(cos(2 * pi() * time_range / 3), 3);
+UPDATE train_p SET time_range_y = ROUND(sin(2 * pi() * time_range / 3), 3);
+    
+-- not relevant anymore because of the 8-hour grouping will be performed in the aggregation later on, and also because the existance of 'date' and 'time_range'.
+ALTER TABLE train_p DROP COLUMN timestamp;      
+
+
+
+
+-- At 'building_metadata': One-Hot encoding on 'primary_use' column
+CREATE TABLE building_metadata_p AS
+SELECT *, 
+    CASE WHEN (primary_use = 'Education') THEN (1) ELSE (0) END AS sw_primary_use_Education,
+    CASE WHEN (primary_use = 'Entertainment/public assembly') THEN (1) ELSE (0) END AS sw_primary_use_Entertainment_publicAssembly,
+    CASE WHEN (primary_use = 'Food sales and service') THEN (1) ELSE (0) END AS sw_primary_use_FoodSalesAndService,
+    CASE WHEN (primary_use = 'Healthcare') THEN (1) ELSE (0) END AS sw_primary_use_Healthcare,
+    CASE WHEN (primary_use = 'Lodging/residential') THEN (1) ELSE (0) END AS sw_primary_use_Lodging_residential,
+    CASE WHEN (primary_use = 'Manufacturing/industrial') THEN (1) ELSE (0) END AS sw_primary_use_Manufacturing_industrial,
+    CASE WHEN (primary_use = 'Office') THEN (1) ELSE (0) END AS sw_primary_use_Office,
+    CASE WHEN (primary_use = 'Other') THEN (1) ELSE (0) END AS sw_primary_use_Other,
+    CASE WHEN (primary_use = 'Parking') THEN (1) ELSE (0) END AS sw_primary_use_Parking,
+    CASE WHEN (primary_use = 'Public services') THEN (1) ELSE (0) END AS sw_primary_use_PublicServices,
+    CASE WHEN (primary_use = 'Religious worship') THEN (1) ELSE (0) END AS sw_primary_use_ReligiousWorship,
+    CASE WHEN (primary_use = 'Retail') THEN (1) ELSE (0) END AS sw_primary_use_Retail,
+    -- Dropped as it was only 1 value following the final join
+    -- CASE WHEN (primary_use = 'Services') THEN (1) ELSE (0) END AS sw_primary_use_Services,
+    CASE WHEN (primary_use = 'Technology/science') THEN (1) ELSE (0) END AS sw_primary_use_TechnologyScience,
+    CASE WHEN (primary_use = 'Utility') THEN (1) ELSE (0) END AS sw_primary_use_Utility
+    -- Dropped as it was only 1 value following the final join
+    -- CASE WHEN (primary_use = 'Warehouse/storage') THEN (1) ELSE (0) END AS sw_primary_use_WarehouseStorage
+FROM building_metadata;
+
+ALTER TABLE building_metadata_p DROP COLUMN primary_use;     -- replaced by one-hot encoding
+
+
+
+
+/* At 'weather_train': 1. join with 'site_ids_train'
+                       2. Adding and dropping columns */
+CREATE TABLE weather_train_p AS
+SELECT *
+FROM weather_train a
+LEFT OUTER JOIN site_ids_train b
+ON a.site_id = b.site_id
+ORDER BY a.site_id, timestamp;
+
+-- Feature Engineering 
+/* "timestamp_loc" is generated for populating a local datetime based on "timestamp" that is at "weather_train".
+    Later I will make a join uses "timestamp" located in "train_p" and "timestamp_loc" located in "weather_train_p" */
+ALTER TABLE weather_train_p ADD COLUMN timestamp_loc DATETIME;  -- has been generated for use as a 'key to key join' with 'timestamp' that is in 'train_p'. Both are local.
+ALTER TABLE weather_train_p ADD COLUMN date DATE;
+ALTER TABLE weather_train_p ADD COLUMN time_range INTEGER; 
+ALTER TABLE weather_train_p ADD COLUMN time_range_x REAL; 
+ALTER TABLE weather_train_p ADD COLUMN time_range_y REAL;
+ALTER TABLE weather_train_p ADD COLUMN wind_direction_x REAL;
+ALTER TABLE weather_train_p ADD COLUMN wind_direction_y REAL;
+ALTER TABLE weather_train_p ADD COLUMN rel_humid REAL;
+
+-- Occupancy of the new features 
+
+-- generation of local time based on utc regardless of daylight saving time (dst)
+UPDATE weather_train_p SET timestamp_loc = datetime(timestamp, utc_st_offs||' hours');
+-- Update the local time to daylight saving time (dst)
+UPDATE weather_train_p SET timestamp_loc =
+    CASE WHEN timestamp_loc >= start_dst_16 AND timestamp_loc < datetime(end_dst_16, '-1 hours') THEN datetime(timestamp_loc, '+1 hours')
+         ELSE timestamp_loc END;
+UPDATE weather_train_p SET date = date(timestamp_loc);
+UPDATE weather_train_p SET time_range = CASE WHEN strftime('%H', timestamp_loc) >= '00' AND strftime('%H', timestamp_loc) <= '07' THEN 1
+                                             WHEN strftime('%H', timestamp_loc) >= '08' AND strftime('%H', timestamp_loc) <= '15' THEN 2
+                                             ELSE 3 END;
+UPDATE weather_train_p SET time_range_x = ROUND(cos(2 * pi() * time_range / 3), 3);
+UPDATE weather_train_p SET time_range_y = ROUND(sin(2 * pi() * time_range / 3), 3);
+UPDATE weather_train_p SET wind_direction_x = ROUND(cos(2*pi()*wind_direction/360), 3);
+UPDATE weather_train_p SET wind_direction_y = ROUND(sin(2*pi()*wind_direction/360), 3);
+UPDATE weather_train_p SET rel_humid =
+    ROUND((100 * (6.11 * POWER(10, (7.5 * dew_temperature / (237.7 + dew_temperature)))) / 
+    (6.11 * POWER(10, (7.5 * air_temperature / (237.7 + air_temperature))))), 1);
+
+-- Convert the values at 'cloud_coverage' from 9 to 'NULL' - those indicates that data is missing or not available
+UPDATE weather_train_p SET cloud_coverage = NULL
+WHERE cloud_coverage = 9;
+
+-- Convert the values at 'precip_depth_1_hr' from (-1) to 'NULL' - those indicate that there are no recordings
+UPDATE weather_train_p SET precip_depth_1_hr = NULL
+WHERE precip_depth_1_hr = -1;
+
+-- Dropping columns from 'weather_train_p that are not necessary anymore'
+ALTER TABLE weather_train_p DROP COLUMN timestamp;          -- used to create 'timestamp_loc'
+ALTER TABLE weather_train_p DROP COLUMN timestamp_loc;      -- not relevant anymore because of the 8-hour grouping will be performed in the aggregation later on
+ALTER TABLE weather_train_p DROP COLUMN wind_direction;     -- replaced by cosine and sine features
+ALTER TABLE weather_train_p DROP COLUMN utc_st_offs;        -- used to create 'timestamp_loc'
+ALTER TABLE weather_train_p DROP COLUMN start_dst_16;       -- used to create 'timestamp_loc'
+ALTER TABLE weather_train_p DROP COLUMN end_dst_16;         -- used to create 'timestamp_loc'
+ALTER TABLE weather_train_p DROP COLUMN "site_id:1";        -- duplicated column
+
+
+/* At this point I will create 2 CSV files for 'train_p' and 'weather_train_p' tables.
+   In a new R notebook (#2), I will perform an aggregation for each of the those tables,then keep results 
+   in CSV files and import those CSV files into SQLite Studio to create the flat file by joining 3 tables. */
+

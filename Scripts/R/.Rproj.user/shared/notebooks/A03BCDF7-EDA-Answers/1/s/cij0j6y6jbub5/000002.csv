@@ -1,0 +1,10 @@
+"0","```r
+mm <- getMissingness(movies_ff)
+```"
+"1","This dataset has 239 (8%) complete rows. Original data has 2996 rows.
+"
+"0","```r
+mm
+```"
+"1","$missingness
+"

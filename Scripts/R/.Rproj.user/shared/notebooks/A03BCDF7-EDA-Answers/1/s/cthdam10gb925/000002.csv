@@ -1,0 +1,4 @@
+"0","```r
+# character-Categorical
+strlst <- names(movies_ff)[sapply(movies_ff, is.character)] 
+```"

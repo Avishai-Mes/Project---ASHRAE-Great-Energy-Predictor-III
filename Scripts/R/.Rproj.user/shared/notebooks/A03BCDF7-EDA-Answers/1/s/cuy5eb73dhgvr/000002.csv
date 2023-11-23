@@ -1,0 +1,5 @@
+"0","```r
+missingCols$message
+```"
+"1","[1] \"This dataset has 984 (32.8%) complete rows. Original data has 3000 rows.\"
+"

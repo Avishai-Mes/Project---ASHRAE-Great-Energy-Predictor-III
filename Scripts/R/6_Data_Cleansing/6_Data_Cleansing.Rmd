@@ -1,0 +1,1618 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+##                            ---  Data Cleansing  ---
+
+
+```{r}
+# Import packages
+
+library(readr)
+library(visdat)
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(odbc)
+library(DBI)
+library(dbscan)
+library(naniar)
+library(cocor)
+library(gridExtra)
+library(corrgram)
+library(psych)
+# 'mechkar' - written by Tomas Carpati
+source("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Scripts/R/mechkar.R")  
+source("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Scripts/R/utils.R")
+```
+
+Import of 'ff_train_agg' dataset from check point 1:
+
+```{r}
+ff_train_agg <- data.frame(read.csv("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/CheckPoint1/ff_train_agg.csv"))
+ff_train_agg
+```
+
+
+Converting 'date' variable's data type from 'character' to 'date':
+
+```{r}
+ff_train_agg$date <- as.Date(ff_train_agg$date, format = "%Y-%m-%d") 
+```
+
+
+
+Feature Engineering: 
+
+Based on patterns discovered in 'scatter_plots_combinations_X_vars' file that 
+exhibits scatter plots for each combination of variables carried out on the 'EDA' 
+notebook:
+
+```{r}
+# Generate a binary column based on the relationship between 'air_temperature_mean' and 'date' columns (page 24)
+# Identifying upward and downward trends in the graph
+ff_train_agg$is_upward_date <- ifelse(ff_train_agg$date <= as.Date("2016-07-21", format = "%Y-%m-%d"), 1, 0)
+
+# Generate a binary column based on the relationship between 'dew_temperature_mean' and 'precip_depth_sum' columns (page 55)
+# Identify dew temperatures where there is a precipitation
+ff_train_agg$is_precip_dew_temperature_mean <- ifelse(ff_train_agg$dew_temperature_mean >= -10.0, 1, 0)
+
+# Generate a binary column based on the relationship between 'air_temperature_mean' and 'precip_depth_min' columns (page 64)
+# Identify temperatures where there is a precipitation
+ff_train_agg$is_precip_air_temperature_mean <- ifelse(ff_train_agg$air_temperature_mean >= -15.6 & ff_train_agg$air_temperature_mean <= 31.0, 1, 0)
+```
+
+
+Feature Engineering:
+
+Based on graph displays of variables with outliers, that should remain in the 
+dataset ("keep_list"). This display is exhibited later in this notebook as part 
+of handling of outliers. These facts could also be learned by the graphs produced 
+by 'exploreData' function executed in the "EDA" notebook and also by the 'summary' 
+output of the "EDA" notebook.
+
+```{r}
+# Create indicator of zeros columns to sparse columns
+ff_train_agg$is_zero_precip_depth_sum <- ifelse(ff_train_agg$precip_depth_sum == 0, 1, 0)
+ff_train_agg$is_zero_precip_depth_min <- ifelse(ff_train_agg$precip_depth_min == 0, 1, 0)
+ff_train_agg$is_zero_precip_depth_max <- ifelse(ff_train_agg$precip_depth_max == 0, 1, 0)
+ff_train_agg$is_zero_precip_depth_sd <- ifelse(ff_train_agg$precip_depth_sd == 0, 1, 0)
+
+# create a new column based on the special behavior of 'cloud_coverage_mode' and 'cloud_coverage_min' with respect to even and odd values
+ff_train_agg$is_even_cloud_coverage <- ifelse(ff_train_agg$cloud_coverage_mode %% 2 == 0, 1, 0)
+```
+
+
+
+####   **Outliers**
+
+Associating variables to groups:
+
+```{r}
+# nominal columns 
+nominal <- c("site_id", "building_id",  
+                       # all variables that start with 'sw' or 'is' (binary variables)
+                       names(ff_train_agg)[grepl('^(sw|is)', names(ff_train_agg))])
+
+# Cyclical variables (contain "_x_" or "_y_" or "_x" or "_y")
+cyclical_vars <- names(ff_train_agg)[grep("_x_|_y_|(_x$|_y$)", names(ff_train_agg))]
+
+# Excluding variables whose their outlier check is not relevant
+vars_for_outliers <- names(ff_train_agg)[!names(ff_train_agg) %in% c(nominal, cyclical_vars, 'date')]
+```
+
+
+Factorizing:
+As a good practice, all nominal variables will be factorized right after import 
+of the data and right after new nominal variables creation later in the code.
+Nominal variables should be factorized, to be ready for a use in mathematical
+functions later on.
+
+```{r}
+ff_train_agg[, nominal] <- lapply(ff_train_agg[, nominal], factor)
+```
+
+
+
+The effect of outliers in variables on the outcome variable:
+
+```{r}
+# For runtime considerations, I will take a random sample of data
+set.seed(1)
+sample_df <- ff_train_agg %>% slice_sample(n = 10000)
+# n = 10000: 1 minutes runtime
+
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/scatter outliers graphs.pdf")
+options(repr.plot.width = 8, repr.plot.height = 8)
+par(mfrow=c(3,2))
+
+outmat <- outlierMatrix(sample_df)
+
+for (n in vars_for_outliers) {
+  n_out <- sample_df[[n]]
+  n_non <- sample_df[[n]][which(outmat[[n]] == 0)]
+  meter_reading_sum_out <- sample_df$meter_reading_sum
+  meter_reading_sum_non <- meter_reading_sum_out[which(outmat[[n]] == 0)]
+  outdf <- data.frame(x_out = n_out, y_out = meter_reading_sum_out)
+  nondf <- data.frame(x_non = n_non, y_non = meter_reading_sum_non)
+  
+  # set the same limits for both plots for easier comparison
+  min_x_val <- min(c(n_out, n_non), na.rm = TRUE)
+  max_x_val <- max(c(n_out, n_non), na.rm = TRUE)
+  min_y_val <- min(c(meter_reading_sum_out, meter_reading_sum_non), na.rm = TRUE)
+  max_y_val <- max(c(meter_reading_sum_out, meter_reading_sum_non), na.rm = TRUE)
+  scatter.smooth(outdf$y_out ~ outdf$x_out, xlab = n, family = "symmetric", 
+                 xlim = c(min_x_val, max_x_val), ylim = c(min_y_val, max_y_val))
+  scatter.smooth(nondf$y_non ~ nondf$x_non, xlab = n, family = "symmetric", 
+                 xlim = c(min_x_val, max_x_val), ylim = c(min_y_val, max_y_val))
+}
+
+dev.off()
+```
+
+Differences in distributions can be seen in the graph, when outliers 
+are exist and not exist.
+
+
+
+
+#### Differences in distributions - with and without outliers
+
+A comparison of variable distributions with and without outliers using 
+**Kolmogorov Smirnov** statistics. This is a non-parametric statistics that can 
+be used on variables without outliers as well.
+
+'ks.test' function (for outliers):
+
+```{r}
+res1 <- NULL
+outmat <- outlierMatrix(ff_train_agg)
+# Excluding variables that outliers check is not relevant to them
+for(n in vars_for_outliers){
+  n_out <- ff_train_agg[[n]]                           # 'n_out' includes outliers
+  n_non <- ff_train_agg[[n]][which(outmat[[n]] == 0)]  # 'which' returns indices
+  outnum <- length(n_out) - length(n_non)
+  # Only when outliers are exist
+  if(outnum >0) {
+    pval <- suppressWarnings(ks.test(n_out, n_non)$p.value)
+    res1 <- rbind(res1, cbind(var = n, outliers_num = outnum, 
+                          distribution_changed = ifelse(pval < 0.05, "+", "-")))  
+  }
+  
+}
+res1
+```
+
+
+
+When p value is statistically significant (<0.05), 'distribution_changed' is '+',
+that means there is a difference between the 2 distributions - with and without 
+outliers, which means outliers change the variable distribution.
+
+
+
+
+Before making a decision about outliers of which of the variables should be 
+deleted, a second test will be made with the outliers, checks if they change the 
+correlation between the tested variable and the outcome variable. A statistical 
+method for checking whether 2 correlations are significantly different was developed 
+by Diedenhofen and Musch. This method was implemented in an R package called 
+'cocor'.
+I'm interested in Fisher'Z and its p value. A significant P value means there is 
+a difference in both correlations.
+
+The 'cocor' function encounters issues when receiving a vector with a standard 
+deviation of 0. To handle this, I implemented an 'if' statement with 'next' to 
+skip such cases. This condition was specifically applied to two sparse columns: 
+'precip_depth_min' and 'precip_depth_sd'. Due to their sparsity, all non-zero 
+values in these columns are considered outliers, resulting in a single unique 
+value (sd = 0) when outliers are excluded. Recognizing that the correlation of 
+these columns with the outcome variable, with and without outliers (non-zero values) 
+is sure to get changed, I manually added these two columns to the 'res2' table 
+with a '+' sign in the 'correlation_changed' column.
+
+'cocor' function:
+
+```{r}
+res2 <- NULL
+outmat <- outlierMatrix(ff_train_agg)
+# Excluding variables that outliers check is not relevant to them
+for(n in vars_for_outliers){
+  out <- ff_train_agg[[n]]                           # data including outliers
+  non <- ff_train_agg[[n]][which(outmat[[n]] == 0)]  # data excluding outliers
+  outnum <- length(out) - length(non)
+  # Only when outliers are exist
+  if(outnum >0) {
+    # make sure that SD !=0 for the use of 'cocor' function
+    if(length(unique(non)) <= 1){
+      # manual intervention (explained above) - Applied on 'precip_depth_min' and 'precip_depth_sd'
+      res2 <- rbind(res2, cbind(var = n, correlation_changed = '+'))
+      next
+    }   
+    meter_reading_sum_out <- ff_train_agg$meter_reading_sum                # outcome including outliers
+    meter_reading_sum_non <- meter_reading_sum_out[which(outmat[[n]] == 0)]  # outcome excluding outliers
+    outdf <- data.frame(x_out = out,y_out = meter_reading_sum_out)
+    nondf <- data.frame(x_non = non,y_non = meter_reading_sum_non)
+    # A check if there is a difference between 2 correlations
+    cr <- cocor(~ x_out + y_out | x_non + y_non, data = list(outdf, nondf))
+    pval <- cr@fisher1925$p.value
+    res2 <- rbind(res2, cbind(var = n, correlation_changed = ifelse(pval < 0.05, "+", "-")))
+  }
+}
+res2
+```
+
+
+
+For getting final decisions about outliers of which of the variables should be 
+deleted, the two dataframes will be joined.
+
+```{r}
+res <- inner_join(data.frame(res1),data.frame(res2),by = "var")
+
+# Adds a column - a condition for dropping or not the outliers
+res$drop <- ifelse((res$distribution_changed == "+" & res$correlation_changed == "+") | 
+                   (res$distribution_changed == "-" &
+                      res$correlation_changed == "-"), 
+                   "No", "Yes")
+
+# Remove 'meter_reading_sum' variable from the res data frame
+res <- res[res$var != "meter_reading_sum", ]
+res
+```
+Outliers of variables that are indicated as "Yes", under the "drop" column at 
+"res" table, will be dropped, by converting to "NA".
+
+Outliers of variables that are indicated as "No", under the "drop" column at 
+"res" table will be either transformed by 'log'/ 'sqrt' or converted to categories.
+
+
+
+
+#### Outliers handling
+
+
+Drop outliers that need to be droped and create a list of the variables whose 
+their outliers should be remained:
+
+```{r}
+drop_list <- res$var[res$drop == 'Yes']
+outmat <- outlierMatrix(ff_train_agg)
+for(n in drop_list){
+  # skip if there are no outliers in the column
+  if(length(ff_train_agg[which(outmat[[n]] == 1),n]) == 0){next} 
+  # 'NA' at 'drop' column leads the variable to appear as 'NA' in 'drop_list' that leads to an error
+  if(is.na(n)){next}
+  ff_train_agg[which(outmat[[n]] == 1),n] <- NA
+}
+
+keep_list <- res$var[res$drop == 'No']
+keep_list
+```
+
+
+
+Guidelines for handling outliers that remain in the dataset:
+
+Columns with large range of values need to be transformed in order to bring the 
+outliers closer to the middle. I may use log/ sqrt transformation for that.
+
+'log' transformation - to variables with large range of values, with rapid decay 
+in the distribution graph (light-tailed/ high Alpha). Log makes the differences 
+between the original low values to be negligible, while the changes of the 
+original high values to be significant.
+
+'sqrt' transformation - to variables with large range of values, with a milder 
+decay in the distribution graph (heavy-tailed/ low Alpha). When preserving 
+differences between values is necessary, including the low values.
+
+'Categorization' - to variables with small value range (no tail). When differences 
+within each category are not really important.
+
+
+
+Finding the range size of 'keep_list' variables, to help get a decision about 
+the way their outliers will be treated, according to the guidelines above. 
+
+```{r}
+# precip_depth_sum
+unique_sorted_precip_depth_sum <- sort(unique(ff_train_agg$precip_depth_sum))
+
+# precip_depth_min
+unique_sorted_precip_depth_min <- sort(unique(ff_train_agg$precip_depth_min))
+
+# precip_depth_max
+unique_sorted_precip_depth_max <- sort(unique(ff_train_agg$precip_depth_max))          
+
+# precip_depth_sd
+minimum_precip_depth_sd <- min(ff_train_agg$precip_depth_sd, na.rm = TRUE)
+maximum_precip_depth_sd <- max(ff_train_agg$precip_depth_sd, na.rm = TRUE)
+
+# dew_temperature_mean
+minimum_dew_temperature_mean <- min(ff_train_agg$dew_temperature_mean, na.rm = TRUE)
+maximum_dew_temperature_mean <- max(ff_train_agg$dew_temperature_mean, na.rm = TRUE)                                                                   
+
+# dew_temperature_min
+minimum_dew_temperature_min <- min(ff_train_agg$dew_temperature_min, na.rm = TRUE)
+maximum_dew_temperature_min <- max(ff_train_agg$dew_temperature_min, na.rm = TRUE)
+
+# dew_temperature_max
+minimum_dew_temperature_max <- min(ff_train_agg$dew_temperature_max, na.rm = TRUE)
+maximum_dew_temperature_max <- max(ff_train_agg$dew_temperature_max, na.rm = TRUE)
+
+# rel_humid_mean
+minimum_rel_humid_mean <- min(ff_train_agg$rel_humid_mean, na.rm = TRUE)
+maximum_rel_humid_mean <- max(ff_train_agg$rel_humid_mean, na.rm = TRUE)
+
+# rel_humid_min
+minimum_rel_humid_min <- min(ff_train_agg$rel_humid_min, na.rm = TRUE)
+maximum_rel_humid_min <- max(ff_train_agg$rel_humid_min, na.rm = TRUE)
+
+# rel_humid_max
+minimum_rel_humid_max <- min(ff_train_agg$rel_humid_max, na.rm = TRUE)
+maximum_rel_humid_max <- max(ff_train_agg$rel_humid_max, na.rm = TRUE)
+
+# cloud_coverage_mode
+unique_sorted_cloud_coverage_mode <- sort(unique(ff_train_agg$cloud_coverage_mode))
+
+# cloud_coverage_max
+unique_sorted_cloud_coverage_max <- sort(unique(ff_train_agg$cloud_coverage_max))
+
+# elevation_mode
+unique_stored_elevation_mode <- sort(unique(ff_train_agg$elevation_mode))              
+
+# square_feet
+unique_sorted_square_feet <- sort(unique(ff_train_agg$square_feet))
+
+# year_built
+unique_stored_year_built <- sort(unique(ff_train_agg$year_built))              
+
+# floor_count
+unique_stored_floor_count <- sort(unique(ff_train_agg$floor_count))              
+```
+
+Summary of value ranges and nature of distribution of the variables with outliers 
+that should remain in the dataset:
+
+
+ 1. precip_depth_sum:     0 - 1691;       small range;              -> categorization    
+ 2. precip_depth_min:     0 - 206;        small range;              -> categorization
+ 3. precip_depth_max:     0 - 343;        small range;              -> categorization
+ 4. precip_depth_sd:      0 - 119;        small range;              -> categorization
+ 5. dew_temperature_mean: (-34) - 25.4;   small range;              -> categorization
+ 6. dew_temperature_min:  (-35) - 25;     small range;              -> categorization    
+ 7. dew_temperature_max:  (-33) - 26;     small range;              -> categorization    
+ 8. rel_humid_mean:       5.5 - 100;      small range;              -> categorization    
+ 9. rel_humid_min:        3.8 - 100;      small range;              -> categorization    
+10. rel_humid_max:        8.3 - 100;      small range;              -> categorization    
+11. cloud_coverage_mode:  0 - 8;          small range;              -> do nothing * 
+12. cloud_coverage_max:   0 - 8;          small range;              -> do nothing *   
+13. elevation_mode:       7 - 620;        small range;              -> categorization     
+14. square_feet:          4314 - 861524;  large range; light-tailed -> log
+15. year_built:           1902 - 2016,    small range;              -> categorization
+16. floor_count:          1 - 26;         small range;              -> categorization
+ 
+* Will be explained later 
+
+
+
+Handling of outliers - categorization or transformation by 'log'/ 'sqrt':
+
+In order to carry out a categorization on a continuous column, in which the 
+column values are converted to 1,2,3,4, according to division by their quartiles, 
+it's necessary to make sure the distribution of the original column values is 
+normal. When a distribution is normal, distances between the mean values in each 
+quarter of the value range are equal, and therefore conversion to 1,2,3,4 
+represents the proportions between each quarter's mean values at the original 
+column. Then, the ordinality in the converted ordinal variable is considered 
+justified. In a case of a non-normal distribution, such as a light-tailed 
+distribution, I will execute a log or square root transformation, in an attempt 
+to normalize the distribution. If it has become normal, I'll create a new column 
+of the log/ square root transformation that replaces the original in the dataset 
+and then execute the categorization into 1,2,3,4 on the transformed column values. 
+If it has not become normal, I will categorize the original column into 1,2,3,4, 
+but will also factorize the converted column, Because the ordinality of the 
+conversion, in this case, does not correctly represent the distances in the 
+original column values. In this case, the converted column values become nominal
+and there is no choice but to lose the potential ordinal value of the categorized 
+variable.
+
+
+Here I will check the distributions of the above columns that need to be 
+categorized and will try to normalize those, whose distribution is not normal, 
+by executing a transformation on the column. 'square_feet' will not be checked 
+because it doesn't need to be categorized. Neither do 'cloud' columns, 'year_built',
+and 'floor_count' since they are ordinal, thus can't be normally-distributed.
+
+
+
+precip_depth_sum:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = precip_depth_sum)) +
+  geom_density()
+```
+Non-normal distribution. It is a sparse column.
+
+I will check its distribution following exclusion of all zeros:
+
+```{r}
+# Exclude  "0" from the original sparse column
+ggplot(data = ff_train_agg %>% filter(precip_depth_sum != 0), aes(x = precip_depth_sum)) +
+  geom_density()
+```
+Non-normal distribution.
+
+I will check distribution of the log transformation on the non-zero values:
+
+```{r}
+# log transformation on the no-zero values
+ggplot(data = ff_train_agg %>% filter(precip_depth_sum != 0), aes(x = log10(precip_depth_sum + 1))) +
+  geom_density()
+```
+I will take this as a non-normal distribution. It looks similar to normal, but 
+since the other 'precip' variables seem non-normal, I guess this one is non-normal
+either, and probably if there were more data points, it would be possible to 
+notice that it is not normal more clearly.
+
+
+precip_depth_min:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = precip_depth_min)) +
+  geom_density()
+```
+
+Non-normal distribution. It is a sparse column.
+
+I will check its distribution following exclusion of all zeros:
+
+```{r}
+# Excluding "0" from the original sparse column
+ggplot(data = ff_train_agg %>% filter(precip_depth_min != 0), aes(x = precip_depth_min)) +
+  geom_density()
+```
+Non-normal distribution.
+
+I will check distribution of the log transformation on the non-zero values:
+
+```{r}
+# log transformation on the non-zero values
+ggplot(data = ff_train_agg %>% filter(precip_depth_min != 0), aes(x = log10(precip_depth_min + 1))) +
+  geom_density()
+```
+I will take this as a non-normal distribution.
+
+
+
+precip_depth_max:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = precip_depth_max)) +
+  geom_density()
+```
+Non-normal distribution. It is a sparse column.
+
+I will check its distribution following exclusion of all zeros:
+
+```{r}
+# Excluding "0" from the original sparse column
+ggplot(data = ff_train_agg %>% filter(precip_depth_max != 0), aes(x = precip_depth_max)) +
+  geom_density()
+```
+Non-normal distribution.
+
+I will check distribution of the log transformation on the non-zero values:
+
+```{r}
+# log transformation on the non-zero values
+ggplot(data = ff_train_agg %>% filter(precip_depth_max != 0), aes(x = log10(precip_depth_max + 1))) +
+  geom_density()
+```
+I will take this as a non-normal distribution
+
+
+
+precip_depth_sd:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = precip_depth_sd)) +
+  geom_density()
+```
+Non-normal distribution. It is a sparse column.
+
+I will check its distribution following exclusion of all zeros:
+
+```{r}
+# Excluding "0" from the original sparse column
+ggplot(data = ff_train_agg %>% filter(precip_depth_sd != 0), aes(x = precip_depth_sd)) +
+  geom_density()
+```
+Non-normal distribution.
+
+I will check distribution of the log transformation on the non-zero values:
+
+```{r}
+# log transformation on the non-zero values
+ggplot(data = ff_train_agg %>% filter(precip_depth_sd != 0), aes(x = log10(precip_depth_sd + 1))) +
+  geom_density()
+```
+I will take this as a non-normal distribution.
+
+
+
+dew_temperature_mean:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = dew_temperature_mean)) +
+  geom_density()
+```
+I'll take this as a normal distribution.
+
+
+dew_temperature_min:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = dew_temperature_min)) +
+  geom_density()
+```
+I'll take this as a normal distribution.
+
+
+dew_temperature_max:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = dew_temperature_max)) +
+  geom_density()
+```
+I'll take this as a normal distribution.
+
+
+rel_humid_mean:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = rel_humid_mean)) +
+  geom_density()
+```
+It is a right-skewed (alpha > 0) normal distribution. In cases of right or left 
+skew, a 'log' or 'square root' transformation may improve the normality of the 
+distribution. 'Square root' is more appropriate when the original column values 
+are very low (up to several hundred). I will execute a 'square root' transformation.
+
+
+```{r}
+# 'Square root' transformation
+ggplot(data = ff_train_agg, aes(x = sqrt(rel_humid_mean))) +
+  geom_density()
+```
+Following the square root transformation it is skewed even further to the right.
+'log' result is skewed to the right even more.
+I'll take the original column as normally-distributed.
+
+
+rel_humid_min:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = rel_humid_min)) +
+  geom_density()
+```
+I'll take this as a normal distribution.
+
+
+rel_humid_max:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = rel_humid_max)) +
+  geom_density()
+```
+It is a right-skewed (alpha > 0) normal distribution. 
+
+I will execute a 'square root' transformation:
+
+```{r}
+# 'Square root' transformation
+ggplot(data = ff_train_agg, aes(x = sqrt(rel_humid_max))) +
+  geom_density()
+```
+Following the square root transformation it is skewed even further to the right, 
+I'll take the original column as non-normally-distributed.
+
+
+
+The 2 "cloud" columns are ordinal variables, thus can't be normally-distributed 
+and can't become one, but I exhibit them here anyway, to see if I can learn 
+something about them.
+
+cloud_coverage_mode:
+
+```{r}
+# The original column
+hist(ff_train_agg$cloud_coverage_mode)
+```
+
+
+cloud_coverage_max:
+
+```{r}
+# The original column
+hist(ff_train_agg$cloud_coverage_max)
+```
+I can learn about the above 2 'cloud' columns, that they include patterns within 
+them. Behavior is different between the odd and even values.
+
+
+elevation_mode:
+
+```{r}
+# The original column
+hist(ff_train_agg$elevation_mode)
+```
+
+Non-normal distribution.
+In this case frequency depends on 'site_id''s values, which is categorical, so 
+y-axis (frequency) means nothing in the context of the distribution. There is no 
+point to transform by "log" because it looks discontinuous. If I run a log/ sqrt 
+function, which is a continuous function, on a variable that appears discrete, 
+the result will also be discrete which obviously won't lead to normal distribution.
+
+
+'year_built' and 'floor_count' columns are ordinal variables, thus can't be 
+normally-distributed and can't become one, but I exhibit them here anyway, to 
+see if I can learn something about them.
+
+year_built:
+
+```{r}
+# The original column
+hist(ff_train_agg$year_built)
+```
+
+
+floor_count:
+
+```{r}
+# The original column
+hist(ff_train_agg$floor_count)
+```
+
+
+
+Final summary of findings (outlier handling):
+
+ 1. precip_depth_sum:     non-normal -> log  -> non-normal -> categorization: 0, 1-4 -> factor
+ 2. precip_depth_min:     non-normal -> log  -> non-normal -> categorization: 0, 1-4 -> factor
+ 3. precip_depth_max:     non-normal -> log  -> non-normal -> categorization: 0, 1-4 -> factor
+ 4. precip_depth_sd:      non-normal -> log  -> non-normal -> categorization: 0, 1-4 -> factor
+ 5. dew_temperature_mean: normal                           -> categorization:    1-4
+ 6. dew_temperature_min:  normal                           -> categorization:    1-4
+ 7. dew_temperature_max:  normal                           -> categorization:    1-4
+ 8. rel_humid_mean:       normal                           -> categorization:    1-4
+ 9. rel_humid_min:        normal                           -> categorization:    1-4
+10. rel_humid_max:        non-normal -> sqrt -> non-normal -> categorization:    1-4 -> factor
+11. cloud_coverage_mode:                                   -> do nothing  *  
+12. cloud_coverage_max:                                    -> do nothing  * 
+13. elevation_mode:       non-normal                       -> categorization     1-4 -> factor 
+14. square_feet:                                           -> perform 'log' transformation            
+15. year_built:                                            -> do nothing **
+16. floor_count:                                           -> do nothing **
+ 
+ 
+* I prefer not to categorize 'cloud' columns by quartiles for 3 reasons:
+   1. number of categories will be reduced from 8 to 4 and I will probably lose 
+      information.
+   2. because of the way the values are distributed, where the frequency of the 
+      categories alternately rises and falls. In this case, categorizing by 
+      quantiles results in more loss than gain.
+   3. Patterns were found in those columns, which are good for the Explained 
+      Variance.
+
+     
+** I prefer not to categorize 'year_built' and 'floor_count' columns by quartiles 
+   for 2 reasons:
+    1. In 'year_built' number of categories will be reduced from 87 to 4 and in 
+       'floor_count' number of categories will be reduced from 11 to 4. In both
+       cases, I will probably lose information since that.
+    2. because of the way the values are distributed. In these cases, categorizing 
+       by quantiles result in more loss than gain.
+  
+  
+
+In conclusion, none of the columns have shown a normal distribution following 
+log/square root transformations, thus, new transformed columns will not be 
+created to replace the original ones before categorization is made. The 4 'precip' 
+columns are sparse, thus In this special case I ran a log transformation only on 
+the non-zero values. The sparseness of these columns makes it a special case, 
+which is why I will categorize it in a slightly different way, which is explained 
+later. Apart from the 4 'precip' columns all the other 7 columns will be 
+categorized to 1-4 based on their quartiles, When those whose distribution was 
+not normal, both in the original column and in the transformation (in case 
+they have), will be converted to 'factor' after the categorization. Those will 
+loose their potential to be ordinal and become nominal. One column will be 
+transformed by square root.
+
+
+
+I will handle the 4 'precip' columns as follows: 
+
+1. I will execute the categorization, in this case, in a different way. These will 
+   be categorized to 5 categories (instead of 4): 0, 1-4, where 0 represents the 
+   zero values, and 1-4 represent belonging to the quarters of the non-zero values
+2. I'll create new binary columns depend on the categorized columns, in which '1' 
+   represents the zero values, and '0' represents all the rest. I do this to help 
+   the models distinguish between the zero values to the quartiles.
+
+
+
+Categorization & Log transformation (outlier handling):
+
+```{r}
+# Exclude from 'keep_list' 4 variables I decided not to categorize
+keep_list1 <- setdiff(keep_list, c('cloud_coverage_mode', 'cloud_coverage_max', 'year_built', 'floor_count'))
+
+# Distribution of "square_feet" has a medium range of values with a light tailed
+vars_for_log <- "square_feet"
+outmat <- outlierMatrix(ff_train_agg)
+for(n in keep_list1){
+  if(is.na(n)){next}
+  # log transformation
+  if(n %in% vars_for_log){
+    ff_train_agg[, n] <- sapply(ff_train_agg[, n], 
+      FUN = (function(x){log10(x + 1)}))
+  }
+  # categorization
+  else {
+    # A special categorization on the 4 sparse columns
+    if (n %in% c("precip_depth_sum", "precip_depth_min", "precip_depth_max", "precip_depth_sd")) {
+      non_zero_values <- ff_train_agg[[n]][!is.na(ff_train_agg[[n]]) & ff_train_agg[[n]] != 0]
+      Q1 <- quantile(non_zero_values, 0.25, na.rm = TRUE)
+      Q2 <- quantile(non_zero_values, 0.5, na.rm = TRUE)
+      Q3 <- quantile(non_zero_values, 0.75, na.rm = TRUE)
+
+      if ((Q1 != Q2) & (Q2 != Q3)) {
+        ff_train_agg[[n]][!is.na(ff_train_agg[[n]]) & ff_train_agg[[n]] != 0] <- 
+          cut(non_zero_values, breaks = c(-Inf, Q1, Q2, Q3, Inf),
+          labels = c(1, 2, 3, 4))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+      # When Q1 = Q2, Q1 does not function as a break
+      else if ((Q1 == Q2) & (Q2 != Q3)) {
+        ff_train_agg[[n]][!is.na(ff_train_agg[[n]]) & ff_train_agg[[n]] != 0] <- 
+          cut(non_zero_values, breaks = c(-Inf, Q1, Q3, Inf),
+          labels = c(1, 2, 3))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+      # When Q2 = Q3, Q3 does not function as a break
+      else if ((Q1 != Q2) & (Q2 == Q3)) {
+        ff_train_agg[[n]][!is.na(ff_train_agg[[n]]) & ff_train_agg[[n]] != 0] <- 
+          cut(non_zero_values, breaks = c(-Inf, Q1, Q2, Inf),
+          labels = c(1, 2, 3))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+      # When Q1 = Q2 = Q3, Q2 and Q3 do not function as breaks
+      else if ((Q1 == Q2) & (Q2 == Q3)) {
+        ff_train_agg[[n]][!is.na(ff_train_agg[[n]]) & ff_train_agg[[n]] != 0] <- 
+          cut(non_zero_values, breaks = c(-Inf, Q1, Inf),
+          labels = c(1, 2))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+    }
+    else {
+      # A categorization on the rest
+      Q1 <- quantile(ff_train_agg[[n]], 0.25, na.rm = TRUE)
+      Q2 <- quantile(ff_train_agg[[n]], 0.5, na.rm = TRUE)
+      Q3 <- quantile(ff_train_agg[[n]], 0.75, na.rm = TRUE)
+
+      if ((Q1 != Q2) & (Q2 != Q3)) {
+        ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Q2, Q3, Inf),
+          labels = c(1, 2, 3, 4))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+      # When Q1 = Q2, Q1 does not function as a break
+      else if((Q1 == Q2) & (Q2 != Q3)) {
+        ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Q3, Inf),
+          labels = c(1, 2, 3))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+      # When Q2 = Q3, Q3 does not function as a break
+      else if((Q1 != Q2) & (Q2 == Q3)) {
+        ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Q2, Inf),
+          labels = c(1, 2, 3))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+      # When Q1 = Q2 = Q3, Q2 and Q3 do not function as breaks
+      else if((Q1 == Q2) & (Q2 == Q3)) {
+        ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Inf),
+          labels = c(1, 2))
+        ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+      }
+  }
+}}
+# Factorize variables that are non-normally distributed, also following the log transformation
+to_be_factorized <- c('precip_depth_sum', 'precip_depth_min', 'precip_depth_max', 'precip_depth_sd', 'rel_humid_max', 'elevation_mode')
+ff_train_agg[, to_be_factorized] <- lapply(ff_train_agg[, to_be_factorized], factor)
+```
+
+
+
+update the nominal object following the factorizing was made above:
+
+```{r}
+nominal <- c(nominal, to_be_factorized)
+nominal
+```
+
+
+
+
+
+####    **Missingness**
+
+Now, I will identify which new missing values have arisen due to the earlier 
+removal of outliers:
+
+```{r}
+mm <- getMissingness(ff_train_agg)
+mm
+```
+
+First, I will delete rows from the data where there is up to 1% of missing values 
+in a column:
+
+```{r}
+columns_with_few_missing <- mm$missingness$var[mm$missingness$rate <= 1] 
+rows_without_missing <- complete.cases(ff_train_agg[, columns_with_few_missing])
+ff_train_agg <- ff_train_agg[rows_without_missing, ]
+```
+
+
+Following deletion of rows, another check of missingness status for a case where
+another variables became having up to 1% of missing values:
+
+```{r}
+mm <- getMissingness(ff_train_agg)
+mm
+```
+
+Following the deletion of the rows performed above, 'air_temperature_mean' became 
+to be with less than 1% of missing values, therefore I will delete all the records 
+that have missing values in this column as well.
+
+
+```{r}
+columns_with_few_missing <- mm$missingness$var[mm$missingness$rate <= 1]
+rows_without_missing <- complete.cases(ff_train_agg[, columns_with_few_missing])
+ff_train_agg <- ff_train_agg[rows_without_missing, ]
+```
+
+
+Following deletion of rows, another check of missingness status:
+
+```{r}
+mm <- getMissingness(ff_train_agg)
+mm
+```
+
+Finally, there are no columns that have less than or equal to 1% of missing 
+values. Following the records dropping, total number of deleted records from the 
+dataset is 16242.
+
+
+
+#### Rows handling
+
+The following is a check for the amount of missing values per **row**. Based on that, 
+a decision if there are any **rows to be dropped** will be made. A new dataframe 
+of missing values will be generated again as there are new missing values due to 
+drop of outliers.
+
+```{r}
+# A new data frame of missing values
+ff_train_agg_na <- missingMatrix(ff_train_agg)
+ff_train_agg_na_rows <- ff_train_agg_na 
+# A new column - percent of missing values in each row
+ff_train_agg_na_rows$pct <- round((rowSums(ff_train_agg_na) / ncol(ff_train_agg_na)) * 100, 1)
+# Groups the data by the "pct" column and counts the number of rows with each percentage of missing values
+# Rows that have 50% or more of missing vakues will be dropped later
+ff_train_agg_na_rows %>% group_by(pct) %>% tally
+```
+
+As showed above, there are no rows with 50% or more of missing values. Therefore 
+no rows will be dropped.
+
+
+'floor_count' has 96.5% of missing values. Where it is more than 79% I drop the 
+column from the dataset, thus this column will be dropped.
+
+'year_built' has missing values in the range 40% - 79%, thus there is no choice 
+but to categorize it, although losing its many categories.
+
+
+Deleting variables from the dataset where there are more than 79% of missing values:
+
+```{r}
+variables_to_remove <- (mm$missingness %>% filter(rate > 79))$var
+ff_train_agg <- ff_train_agg[, !(names(ff_train_agg) %in% variables_to_remove)]
+```
+
+
+Another check of missingness status:
+
+```{r}
+mm <- getMissingness(ff_train_agg)
+mm
+```
+
+
+#### Mechanism of Missingness
+
+Discovery of the mechanism of missingness, which is the reason for the formation 
+of missing values in each variable. 
+
+
+#### A visualization of distribution differences in predictor variables 
+
+Here we distinguish between 2 groups: missing values records vs non-missing
+values records (by group = m), while next, in 'Kolmogorov Smirnov' test, we 
+distinguish between a little different 2 groups: the whole vector, including 
+missing values, versus the vector excluding them. These are 2 different forms of 
+division. The division here emphasizes the differences between the records with 
+missing values and those without, since this is intended for visualization. That 
+way it will be easier to visually distinguish the differences.
+
+
+```{r}
+# Running time - 5 min
+
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/missing_values_generation_graph.pdf", onefile = T)
+options(repr.plot.width = 20, repr.plot.height = 20)
+
+for (m in mm$missingness$var) {
+  # Initializes a counter variable i to 1
+  i <- 1
+  #  Initializes an empty list to store the plots for each variable
+  p <- list()
+  # numeric values only
+  for (v in names(ff_train_agg[!names(ff_train_agg) %in% c('date', nominal)])) {
+    if (v != m) {
+      # I factorize m as it gets 0 or 1 from 'ff_train_agg_na' as nominal values
+      ff <- data.frame(v = ff_train_agg[[v]], m = factor(ff_train_agg_na[[m]]))
+      # Creates a density plot for the current variable v, with the missingness of variable m indicated by color
+      p[[i]] <- suppressMessages(ggplot(data = ff, aes(x = v, group = m, color = m)) + 
+        geom_density() + labs(title = paste("miss=", m), x = v) + theme(plot.title = 
+          element_text(size = 10), axis.text.x = element_text(size = 5), 
+          axis.title.y = element_blank()))
+      i <- i + 1
+    }
+  }
+  # sequence is number of pages in the pdf for a single "m" variable. 
+  for (j in sequence(ceiling(length(p)/9))) {
+  # 'do.call' receives the "grid.arrange" argument and a subset of list "p" and arranges the subset received on a grid in a single pdf page
+  do.call("grid.arrange", p[(9*j-8):(9*j)])
+  }
+}
+dev.off()
+```
+
+
+
+#### Mechanism of missingness - 'Kolmogorov-Smirnov' 
+#### Statistics of the distribution differences
+
+This test is performed by checking distribution of each of the other variables 
+(predictors), for records in which there are missing values in the examined 
+variable, versus those without missing values. If even one of the other variables 
+is found that has a significant difference between its 2 distributions, then 
+explaining the missingness of the examined variable is considered as known and 
+the mechanism for creating its missingness is 'Missing Not at Random' ('MNAR'), 
+otherwise it's either 'MCAR' or 'MAR'.
+
+
+Here I try to explain the mechanism of missing values formation in variables, 
+excluding categorical variables as predictors, as their distributions have no 
+meaning. In the 'logistic regression' method that will be seen later, categorical 
+variables can also be taken into account, because this method does not rely on 
+predictor distributions, but on their ability to explain the outcome variable by 
+their betas.
+
+
+
+'ks.test' function (for missingness):
+
+```{r}
+res3 <- NULL
+for (m in mm$missingness$var) {
+  # Initializes an empty list that will be used to store the 'ggplot' objects that will be created in the following loop
+  p <- list()
+  # numeric values only
+  for (n in names(ff_train_agg[!names(ff_train_agg) %in% c('date', nominal)])) {
+    if (n != m) {
+      miss <- ff_train_agg[[n]]
+      non <- ff_train_agg[[n]][which(ff_train_agg_na[[m]] == 0)]
+      missnum <- length(miss) - length(non)
+      pval <- suppressWarnings(ks.test(miss, non)$p.value)
+      res3 <- rbind(res3, cbind(missing = m, var = n, miss_cnt = missnum, 
+        distribution_changed = ifelse(pval <= 0.05, "+", "-")))
+    }
+  }
+}
+res3 <- data.frame(res3)
+res3
+```
+
+
+
+'MNAR' variables:
+
+```{r}
+res4 <- res3 %>% filter(distribution_changed == "+") 
+mnar_ks <- unique(res4$missing)
+mnar_ks
+```
+
+results:
+
+According to 'ks.test', all 12 variables that have missing values, have at least 
+one other variable in the data that is able to explain their missingness mechanism. 
+According to 'ks.test' these variables have 'MNAR' missingness mechanism. These 
+can not be imputed by 'KNN' method, as there's a reason for their missing values. 
+
+
+
+Another way for discovering the mechanism of missing values formation in variables:
+#### Mechanism of missingness - 'Logistic Regression'
+#### Statistics of the betas
+
+
+'Logistic Regression' is the preferred method as categorical variables also could 
+be included as predictor variables. This method will be implemented on each of 
+the variables having missing values. Decisions will be made, based on significant 
+p values of each variable.
+
+Following the very long running time of 'glm' function with different values of 
+parameters and the run haven't finished after many hours, I will build a sample 
+on which 'glm' will run. This sample will be including X% of the records in the 
+data that have missing values, and X% of the non-missing values. The disadvantage 
+of this method is that there may be a situation in which records with missing 
+values will not be included in the sample, and perhaps in some of those records 
+there are other variables that have a good explanatory potential for the missing 
+values of the response variable at that specific record.
+
+To avoid this, I can generate a sample that includes ALL the missing records 
+combined with another random sample of the rest of the complete records. The 
+disadvantage here is that the relative part of the missing value records will 
+not be preserved. 
+
+I prefer the first type of sample since there are very few missing data and I 
+prefer this proportion to be preserved for the implementation of the models.
+
+
+
+'glm' function - test 1:
+- Implementation on all variables as predictors
+- All data included
+
+```{r}
+# # Filter records with missing values
+# missing_df <- ff_train_agg[complete.cases(ff_train_agg) == FALSE, ]  # 85391 rows
+# 
+# # Filter records without missing values
+# no_missing_df <- ff_train_agg[complete.cases(ff_train_agg), ]        # 358,038 rows
+# 
+# # Calculate the sample sizes based on percentages
+# missing_sample_size <- round(nrow(missing_df) * 0.3)
+# no_missing_sample_size <- round(nrow(no_missing_df) * 0.3)
+# 
+# # Create random samples
+# set.seed(2)
+# missing_sample_df <- missing_df %>% slice_sample(n = missing_sample_size)
+# set.seed(3)
+# no_missing_sample_df <- no_missing_df %>% slice_sample(n = no_missing_sample_size)
+# 
+# # Combine the samples - 30% of the whole data
+# sample_df <- rbind(missing_sample_df, no_missing_sample_df)
+# 
+# # Creating a corresponding sample missingness matrix
+# sample_df_na <- missingMatrix(sample_df)
+# 
+# # Measure the running time
+# start_time <- system.time({
+# 
+#   # examination of missingness mechanism using 'glm'
+#   res5 <- NULL
+#   for(m in mm$missingness$var) {
+#     ff <- sample_df
+#     # change the current examined variable values with its missing indicators
+#     ff[[m]] <- sample_df_na[[m]]
+#     # 'glm' on 'date' and 'nominal' variables only as predictors. Those were excluded from 'ks.test' before
+#     mod <- glm(ff[[m]] ~., data = ff, family = "binomial", maxit = 70, epsilon = 0.00001)
+#     sm <- summary(mod)
+#     if(is.null(sm) == FALSE) {   # A check
+#       sm1 <- data.frame(var = row.names(sm$coefficients), pvalue = sm$coefficients[, 4])
+#       res5 <- rbind(res5, cbind(m, sm1))
+#       # append(res5, sm, m)
+#     } else {
+#       print(sm)
+#       }
+#   }
+#   row.names(res5) <- NULL
+#   res5
+# })
+# 
+# # Print the running time
+# print(paste("Running time:", start_time[3]))
+```
+
+Running result: 
+data sample= 10%; maxit = 50; epsilon = 0.001;      running time = 50 min; p val = all are '1' or close to '1'
+data sample= 30%; maxit = 70; epsilon = 0.00001;    running time = 3.4 h;  p val = all are '1' or close to '1'
+
+
+'glm' works well when there are no many variables, and when the variables don't 
+have a high correlation between them. Since now almost all the p values are 1 or 
+close to 1, it can be concluded that there is a problem with the regression and 
+therefore the results are abnormal. This is usually happens due to the many 
+variables and/ or a high correlation between them. Therefore I will try another 
+'glm' run with different set of predictors.
+
+
+
+'glm' function - test 2:
+- Implementation only on the variables excluded from 'ks.test' as predictors, 
+  which are 'date' and the nominal variables:
+- A sample: 30% of the records that have missing values and 30% of the full records
+
+```{r}
+# # Filter records with missing values
+# missing_df <- ff_train_agg[complete.cases(ff_train_agg) == FALSE, ]  # 85391 rows
+# 
+# # Filter records without missing values
+# no_missing_df <- ff_train_agg[complete.cases(ff_train_agg), ]        # 358,038 rows
+# 
+# # Calculate the sample sizes based on percentages
+# missing_sample_size <- round(nrow(missing_df) * 0.3)
+# no_missing_sample_size <- round(nrow(no_missing_df) * 0.3)
+# 
+# # Create random samples
+# set.seed(3)
+# missing_sample_df <- missing_df %>% slice_sample(n = missing_sample_size)
+# set.seed(4)
+# no_missing_sample_df <- no_missing_df %>% slice_sample(n = no_missing_sample_size)
+# 
+# # Combine the samples - 30% of the whole data
+# sample_df <- rbind(missing_sample_df, no_missing_sample_df)
+# 
+# # Creating a corresponding sample missingness matrix
+# sample_df_na <- missingMatrix(sample_df)
+# 
+# # Measure the running time
+# start_time <- system.time({
+# 
+#   # examination of missingness mechanism using 'glm'
+#   res5 <- NULL
+#   for(m in mm$missingness$var) {
+#     ff <- sample_df
+#     # change the current examined variable values with its missing indicators
+#     ff[[m]] <- sample_df_na[[m]]
+#     # 'glm' on 'date' and 'nominal' variables only as predictors. Those were excluded from 'ks.test' before
+#     mod <- glm(ff[[m]] ~., data = ff[, c('date', nominal)], family = "binomial", maxit = 70, epsilon = 0.00001)
+#     sm <- summary(mod)
+#     if(is.null(sm) == FALSE) {   # A check
+#       sm1 <- data.frame(var = row.names(sm$coefficients), pvalue = sm$coefficients[, 4])
+#       res5 <- rbind(res5, cbind(m, sm1))
+#       # append(res5, sm, m)
+#     } else {
+#       print(sm)
+#       }
+#   }
+#   row.names(res5) <- NULL
+#   res5
+# })
+# 
+# # Print the running time
+# print(paste("Running time:", start_time[3]))
+```
+
+Several running results: 
+data sample = 30%; maxit = 50; epsilon = 0.001;   running time = 62 min; p val = 10 significant
+data sample = 30%; maxit = 70; epsilon = 0.00001; running time = 98 min; p val = 10 significant
+
+
+Basaed on the explanation above, I decide not to rely on the "glm" test, but only on ks.test.
+
+
+```{r}
+#res5 %>% filter(pvalue <= 0.05)
+```
+
+
+
+```{r}
+# # Filter the rows where p-value <= 0.05
+# filtered_res <- res5[res5$pvalue <= 0.05, ]
+# 
+# # Get unique values of m
+# mnar_glm <- unique(filtered_res$m)
+# mnar_glm
+```
+
+
+In both 'ks.test' and 'glm' functions, the same 11 variables were recognized as 
+'MNAR' output, therefore these will be the variables that are considered as 'MNAR' 
+and will undergo categorization rather than imputation.
+
+Since there are several different kind of aggregations (sum, mean, min, max) of 
+the same original variable, for some of the variables, I made sure that among the 
+response variables, there were none, that are explained ONLY by variables that 
+represent another kind of aggregation of the same response variable, since in 
+these cases the explanation of the missingness mechanism is trivial and I would 
+not take it into account. Since I didn't find any, none of the above 'MNAR' output 
+variables will be canceled.
+
+
+```{r}
+mnar <- mnar_ks
+mnar
+```
+
+
+The variables with missing values that are going to be categorized are all the 
+'MNAR' variables and those that have a high missingness rate, i.e. in the range 
+of 40% - 79%. 'year_built' belongs to both groups, but don't you worry, I won't 
+categorize it twice :).
+
+
+
+Categorization of the 'MNAR' variables:
+
+In order to carry out a categorization on a continuous column, in which the 
+column values are converted to 1,2,3,4, according to division by their quartiles, 
+it's necessary to make sure that the distribution of the original column values 
+is normal. When a distribution is normal, distances between the mean values in 
+each quarter of the value range are equal, and therefore conversion to 1,2,3,4 
+represents the proportions between each quarter's mean values of the original 
+column values. Then, the ordinality in the converted ordinal variable is considered 
+justified. In a case of a non-normal distribution, such as a light-tailed 
+distribution, I will execute a log or square root transformation, in an attempt 
+to normalize the distribution. If it has become normal, I'll create a new column 
+of the log/ square root transformation that replaces the original in the dataset 
+and then execute the categorization into 1,2,3,4 on the transformed column values. 
+If it has not become normal, I will categorize the original column into 1,2,3,4, 
+but will also factorize the converted columns because the ordinality of the 
+conversion, in this case, does not correctly represent the distances in the 
+original column values. In this case, the converted column values become nominal 
+and there is no choice but to lose the potential value ordinality of the 
+categorized variable.
+
+
+
+'wind_speed' columns:
+I have learned by reading about other's projects that 'wind_speed' columns usually 
+significantly contribute to the final models. The above 4 'MNAR' 'wind_speed' 
+columns have up to 3.3% of missing values in each column. Since many continuous 
+columns in my dataset undergo categorization and therefore lose their continuous 
+nature, I will unusually choose not to categorize these 4 columns, in order to 
+preserve their continuous nature. Instead, I will delete all rows in the dataset 
+where these 3 columns have missing values.
+
+
+Deleting rows in the dataset where the 4 'MNAR' 'wind_speed' columns have 
+missing values:
+
+```{r}
+rows_without_missing <- complete.cases(ff_train_agg[, c('wind_speed_sd', 'wind_speed_max', 'wind_speed_mean', 'wind_speed_min')])
+ff_train_agg <- ff_train_agg[rows_without_missing, ]
+```
+
+
+
+Following deletion of rows, another check of missingness status:
+
+```{r}
+mm <- getMissingness(ff_train_agg)
+mm
+```
+
+There are no columns that have 1% or less of missing values, therefore no rows 
+should be dropped.
+
+
+As I did when handling of outliers, I will now check distributions of the above 
+variables and try to normalize those whose distribution is not normal, by executing 
+a transformation on the columns' values.
+
+
+'year_built' and 'cloud_coverage_min' are ordinal variables, thus can't be 
+normally-distributed and can't become one, but I exhibit them here anyway, to 
+see if I can learn something about them.
+
+
+year_built:
+
+```{r}
+# The original column
+hist(ff_train_agg$year_built)
+```
+
+
+cloud_coverage_min:
+
+```{r}
+# The original column
+hist(ff_train_agg$cloud_coverage_min)
+```
+
+'cloud_coverage_min' column is an ordinal categorical, therefore in this case, 
+log/ sqrt transformation is not appropriate. If I run a log/ sqrt function, which 
+is a continuous function, on a variable that appears discrete, the result will 
+also be discrete which can't lead to normal distribution. 
+
+
+dew_temperature_sd:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = dew_temperature_sd)) +
+  geom_density()
+```
+
+It is a left-skewed (alpha < 0) normal distribution. In cases of right or left 
+skewed, a log or a square root transformation may improve the normality of the 
+distribution. Square root is more appropriate when the original column values 
+are very small (up to several hundred). I will execute a square root transformation.
+
+
+
+```{r}
+# square root transformation
+ggplot(data = ff_train_agg, aes(x = sqrt(dew_temperature_sd))) +
+  geom_density()
+```
+
+I'll take it as a normal distribution.
+
+
+
+sea_level_pressure_sd:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = sea_level_pressure_sd)) +
+  geom_density()
+```
+It is a left-skewed (alpha < 0) normal distribution. 
+I will execute a square root transformation.
+
+
+
+```{r}
+# square root transformation
+ggplot(data = ff_train_agg, aes(x = sqrt(sea_level_pressure_sd))) +
+  geom_density()
+```
+I'll take it as a normal distribution.
+
+
+
+sea_level_pressure_mean:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = sea_level_pressure_mean)) +
+  geom_density()
+```
+
+Normal distribution.
+
+
+
+sea_level_pressure_max:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = sea_level_pressure_max)) +
+  geom_density()
+```
+
+Normal distribution.
+
+
+
+rel_humid_sd:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = rel_humid_sd)) +
+  geom_density()
+```
+
+It is a left-skewed (alpha < 0) normal distribution. 
+I will execute a square root transformation.
+
+
+
+```{r}
+# log transformation
+ggplot(data = ff_train_agg, aes(x = sqrt(rel_humid_sd))) +
+  geom_density()
+```
+
+I'll take it as a normal distribution.
+
+
+sea_level_pressure_min:
+
+```{r}
+# The original column
+ggplot(data = ff_train_agg, aes(x = sea_level_pressure_min)) +
+  geom_density()
+```
+
+Normal distribution.
+
+
+
+Summary of findings (missing values handling):
+
+1. year_built;                                           -> categorization 1-4 -> factor
+2. cloud_coverage_min;                                   -> drop the variable ***
+3. dew_temperature_sd;      non-normal -> sqrt -> normal -> categorization 1-4       
+4. sea_level_pressure_sd;   non-normal -> sqrt -> normal -> categorization 1-4
+5. sea_level_pressure_mean; normal                       -> categorization 1-4  
+6. sea_level_pressure_max;  normal                       -> categorization 1-4
+7. rel_humid_sd;            non-normal -> sqrt -> normal -> categorization 1-4
+8. sea_level_pressure_min;  normal                       -> categorization 1-4
+
+- *** Will be explained leater
+
+
+In conclusion, 'dew_temperature_sd', 'sea_level_pressure_sd' and 'rel_humid_sd' 
+are variables that originally were not normally-distributed and have turned to be
+normal following a square root transformation. After the transformation is applied 
+on these 3 columns, the transformed variables will replace the corresponding 
+original columns in the dataset before categorization process is conducted.
+All the variables will be categorized to 1-4 based on their quartiles.
+
+
+
+Replacing the original columns with the square root transformation columns:
+
+Feature Engineering:
+
+```{r}
+# New transformed columns
+ff_train_agg$dew_temperature_sd_sqrt <- sqrt(ff_train_agg$dew_temperature_sd)
+ff_train_agg$sea_level_pressure_sd_sqrt <- sqrt(ff_train_agg$sea_level_pressure_sd)
+ff_train_agg$rel_humid_sd_sqrt <- sqrt(ff_train_agg$rel_humid_sd)
+```
+
+
+
+Dropping the variables that were replaced by square root transformation columns:
+
+```{r}
+# Drop the original columns
+ff_train_agg <- subset(ff_train_agg, select = -dew_temperature_sd)
+ff_train_agg <- subset(ff_train_agg, select = -sea_level_pressure_sd)
+ff_train_agg <- subset(ff_train_agg, select = -rel_humid_sd)
+```
+
+
+
+'cloud_coverage_min' column is 'MNAR' and normally should be categorized.
+I prefer not to categorize it by quartiles for some reasons:
+ 1. number of categories will be reduced from 8 to 4 and I will probably lose 
+    information.
+ 2. because of the way the values are distributed, where the frequency of the 
+    categories alternately rises and falls. In this case, categorizing by quantiles 
+    results in more loss than gain.
+Finally it turns out from the EDA that 'cloud_coverage_min' and 'cloud_coverage_mode' 
+have a correlation of 83% between themselves, thus I choose to drop 
+'cloud_coverage_min' at this point.
+
+
+Local Feature Selection:
+
+```{r}
+ff_train_agg$cloud_coverage_min <- NULL
+```
+
+
+
+Variables to be categorized:
+
+```{r}
+mnar1 <- setdiff(mnar, c('wind_speed_sd', 'wind_speed_max', 'wind_speed_mean', 'wind_speed_min', 'cloud_coverage_min', 'dew_temperature_sd', 'sea_level_pressure_sd', 'rel_humid_sd'))
+mnar1 <- c(mnar1, c('dew_temperature_sd_sqrt', 'sea_level_pressure_sd_sqrt', 'rel_humid_sd_sqrt'))
+mnar1
+```
+
+
+
+Categorization (Missing values handling):
+
+```{r}
+# Columns to be categorized
+for(n in mnar1){
+  # Quartiles 
+  Q1 <- quantile(ff_train_agg[[n]], 0.25, na.rm = TRUE)
+  Q2 <- quantile(ff_train_agg[[n]], 0.5, na.rm = TRUE)
+  Q3 <- quantile(ff_train_agg[[n]], 0.75, na.rm = TRUE)
+  
+  if((Q1 != Q2) & (Q2 != Q3)) {
+    # The column is categorized into four categories (1, 2, 3, 4) represent its 4 quartiles
+    # indicating the boundaries of the categories
+    ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Q2, Q3, Inf), 
+      # Specifies the labels to be assigned to each category             
+      labels = c(1, 2, 3, 4))
+    ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+  }
+  # When Q1 = Q2, Q1 does not function as a break
+  else if((Q1 == Q2) & (Q2 != Q3)) {
+    ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Q3, Inf), 
+      labels = c(1, 2, 3))
+    ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+  }
+  # When Q2 = Q3, Q3 does not function as a break
+  else if((Q1 != Q2) & (Q2 == Q3)) {
+    ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Q2, Inf), 
+      labels = c(1, 2, 3))
+    ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+  }
+  # When Q1 = Q2 = Q3, Q2 and Q3 do not function as breaks
+  else if((Q1 == Q2) & (Q2 == Q3)) {
+    ff_train_agg[[n]] <- cut(as.numeric(ff_train_agg[[n]]), breaks = c(-Inf, Q1, Inf), 
+      labels = c(1, 2))
+    ff_train_agg[[n]] <- as.integer(ff_train_agg[[n]])
+  }
+  # Turn 'NAs' to 0 and then create new variables that distinguish between the zeros to all the rest, since the zeros are not part of the quartile categorization
+  ff_train_agg[[n]][is.na(ff_train_agg[[n]])] <- 0
+  # Create binary column
+  binary_column_name <- paste("is_missing", n, sep = "_")
+  # Feature Engineering
+  ff_train_agg[[binary_column_name]] <- ifelse(ff_train_agg[[n]] == 0, 1, 0)
+}
+# Factorize variables that are non-normally distributed, also following the log transformation
+to_be_factorized <- c('year_built')
+ff_train_agg$year_built <- factor(ff_train_agg$year_built)
+```
+
+
+
+update the nominal object following the factorizing was made above:
+
+```{r}
+nominal <- c(nominal, to_be_factorized)
+nominal
+```
+
+
+
+```{r}
+mm <- getMissingness(ff_train_agg)
+mm
+```
+
+Since all the variables with missing values were "MNAR", no other variables with 
+missing values left.
+
+Export 'ff_train_agg' dataset to Check point 2:
+
+```{r}
+# Save 'ff_train_agg' dataset as a CSV file
+write.csv(ff_train_agg, file = "C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/CheckPoint2/ff_train_agg.csv", row.names = FALSE)
+
+# Confirm that the CSV file was created
+file.exists("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/CheckPoint2/ff_train_agg.csv")
+```

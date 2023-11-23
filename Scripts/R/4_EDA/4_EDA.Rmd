@@ -1,0 +1,541 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+##                    ---  Exploratory Data Analysis (EDA)  ---
+
+
+
+```{r}
+# Import packages
+
+library(readr)
+library(visdat)
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(odbc)
+library(DBI)
+library(dbscan)
+library(naniar)
+library(cocor)
+library(gridExtra)
+library(corrgram)
+# 'mechkar' - written by Tomas Carpati
+source("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Scripts/R/mechkar.R")  
+source("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Scripts/R/utils.R")
+```
+
+
+Import of 'ff_train_agg' dataset from check point 1:
+
+```{r}
+ff_train_agg <- data.frame(read.csv("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/CheckPoint1/ff_train_agg.csv")) 
+ff_train_agg
+```
+
+
+
+Converting 'date' variable's data type from 'character' to 'date':
+
+```{r}
+ff_train_agg$date <- as.Date(ff_train_agg$date, format = "%Y-%m-%d") 
+```
+
+
+
+#### Descriptive Statistics:
+
+'summary' function: 
+
+```{r}
+summary(ff_train_agg)
+```
+
+Insights from the Summary:
+
+1. 'meter_reading_sum' - maximum value is 3 orders of magnitude higher than the
+   mean. High outliers are suspected. Although outcome's outliers are not being 
+   handled, it's good to be aware of it.
+2. 'precip_depth_sum',  'precip_depth_min', 'precip_depth_max', 'precip_depth_sd' 
+   - all values up to Q2 are zeros, and are very low up to Q3, therefore the 
+   columns considered sparse. I may later want to create binary columns based on 
+   them indicate zeros and non-zeros. 
+3. 'sea_level_pressure' columns - very low variance in values. There is a concern 
+   that due to the low variability, the differences between the values will not 
+   be reflected in certain models, when other variables with greater variability 
+   will be involved. I may want to normalize the value scale to avoid this.
+
+
+
+'Table1' function: 
+* Performs various statistics - different statistics for continuous and for 
+  categorical variables.
+* Two variables: 'building_id' and 'date' are excluded, as there is no interesting 
+  statistical information for them.
+
+```{r}
+# export the result table to excel, that would be easier to read the 490 rows
+vars_for_Table1 <- names(ff_train_agg[,!names(ff_train_agg) %in% c("building_id", "date")])
+Table1(data = ff_train_agg, miss = 3, x = vars_for_Table1, excel = 1, excel_file = "C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Variable distribution-before data cleansing/Descriptive Statistics-Table1.xlsx")
+```
+
+
+
+#### Descriptive statistics
+
+'exploreData' function:
+
+```{r}
+# For runtime considerations, a random sample of data is taken:
+set.seed(1)
+sample_df <- ff_train_agg %>% slice_sample(n = 10000)
+# n = 10000; running time: 3 min
+
+# y is optional
+suppressWarnings(exploreData(data = sample_df, y = "meter_reading_sum", 
+                             dir = "C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/variable distribution-before data cleansing"))
+```
+
+Up to here is Univariate Analysis.
+
+
+
+scatter plots for each combination of variables:
+
+```{r}
+# Measure running time
+start_time <- system.time({
+  
+  # For running time considerations, a random sample of data is taken:
+  set.seed(2)
+  sample_df <- ff_train_agg %>% slice_sample(n = 5000)
+  # n = 5000; running time 5 min
+  
+  # Create a list of variables to exclude from scatter plots
+  exclude_vars <- c("meter_reading_sum", names(ff_train_agg)[grepl('^(sw|is)', names(ff_train_agg))])
+  
+  # Filter the columns to include in scatter plots
+  plot_vars <- names(ff_train_agg)[!names(ff_train_agg) %in% exclude_vars]
+  
+  # Create an empty list to store scatter plots
+  scatter_plots <- list()
+  
+  pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/scatter_plots_combinations_X_vars.pdf")
+  
+  plot_count <- 0
+  
+  # Generate scatter plots for each combination of variables
+  for (i in 1:(length(plot_vars) - 1)) {
+    for (j in (i + 1):length(plot_vars)) {
+      var_x <- plot_vars[i]
+      var_y <- plot_vars[j]
+      
+      scatter_plot <- ggplot(sample_df, aes(x = .data[[var_x]], y = .data[[var_y]])) +
+        geom_point() +
+        labs(x = var_x, y = var_y) +
+        theme(plot.title = element_text(size = 10),
+              axis.text.x = element_text(size = 5),
+              axis.text.y = element_text(size = 5))
+      
+      scatter_plots[[length(scatter_plots) + 1]] <- scatter_plot
+      
+      plot_count <- plot_count + 1
+      
+      # The first part - checks if 'plot_count' is divisible by 4 without a remainder. It's used to determine if it's time to create a new page in the PDF file, as I want to have 4 plots per page.
+      # The second part - checks if we have reached the last combination of variables. It ensures that even if the number of plots is not a multiple of 4, we still create a new page to include the remaining plots. The last graph takes with it the ones before it.
+      if (plot_count %% 4 == 0 || (i == (length(plot_vars) - 1) && j == length(plot_vars))) { 
+        # Create a grid arrangement for the scatter plots stored in the 'scatter_plots' list
+        scatter_grid <- do.call(grid.arrange, c(scatter_plots, ncol = 2))
+        # Clear the scatter plots list for the next page
+        scatter_plots <- list()
+      }
+    }
+  }
+  
+  dev.off()
+})
+
+# Print the running time
+print(paste("Running time:", start_time[3]))
+```
+
+Based on the above graphs, I will engage in Feature Engineering, wherein I will 
+generate new columns to capture patterns identified within the relationships 
+among the existing columns. The Feature Engineering will be executed in the 
+beginning of the next notebook.
+
+
+
+#### Correlations
+
+**'corr.test'** function permits calculation of correlation coefficient  of 
+ordinal (including binary) and continuous variables in the presence of 
+**missing values**. To be on the safe side, 'spearman' method is used as I'm not 
+sure that all variables are normally distributed. 
+
+
+
+'corr.test' function:
+
+```{r}
+# For runtime considerations, a random sample of data is taken:
+set.seed(3)
+sample_df <- ff_train_agg %>% slice_sample(n = 50000)
+
+# 'corr.test' - A correlation for a full matrix, including p value
+# "pairwise.complete.obs" drops the rows with missing values, only for the pair it calculates the correlation for, at the iteration, and not of the entire dataset.
+
+# Excluding variables that are not ordinal, binary or continuous
+exclude <- c('site_id', 'building_id', 'date')
+vars_for_corr.test <- setdiff(names(ff_train_agg), exclude)
+# Compute correlation coefficient matrix
+dfcormat <- psych::corr.test(sample_df[, vars_for_corr.test], 
+  use = "pairwise.complete.obs", method = "spearman")
+dfcormat
+```
+
+
+
+'corrgram' function:
+
+```{r}
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/Correlation Graph.pdf")
+corrgram::corrgram(dfcormat$r)  # correlation data is in 'r' attribute
+dev.off()
+```
+
+
+Pairs of variables that have an absolute correlation coefficient greater than or 
+equal to 0.7 and statistically significant: 
+
+```{r}
+cormat_df <- data.frame(dfcormat$r)
+pval_df <- data.frame(dfcormat$p)
+# initialize counter variable
+pair_count <- 0  
+for (n1 in names(cormat_df)){
+  for (n2 in names(cormat_df)){
+    if (is.na(cormat_df[n1,n2])){next}
+    if (abs(cormat_df[n1,n2]) >= 0.7 & n1 != n2 & pval_df[n1,n2] <= 0.05){
+      # To prevent the same pair from repeating itself in reverse order
+      if (n1 < n2) {
+        # print the pairs and their correlations
+        cat(n1, ",", n2, round(cormat_df[n1,n2], 4), '\n')  
+      }
+      # increment the counter variable
+      pair_count <- pair_count + 1  
+    }
+  }
+}
+# print the total count
+cat('\n', "Number of variable pairs with significant high correlation:", pair_count/2)  
+```
+
+According to 'corr.test', 29 pairs of variables have correlation coefficient 
+greater than or equal to 0.7 and statistically significant. 
+One of each pair of these variables may be deleted since it tells the same story.
+
+
+
+Pairs of variables that have an absolute correlation coefficient between 0.2 and 
+0.7 and statistically significant.
+
+```{r}
+cormat_df <- data.frame(dfcormat$r)
+pval_df <- data.frame(dfcormat$p)
+pair_count <- 0  # initialize counter variable
+for (n1 in names(cormat_df)){
+  for (n2 in names(cormat_df)){
+    if (is.na(cormat_df[n1,n2])){next}
+    if (abs(cormat_df[n1,n2]) >= 0.2 & abs(cormat_df[n1,n2]) < 0.7 & n1 != n2 & pval_df[n1,n2] <= 0.05){
+      # To prevent the same pair from repeating itself in reverse order
+      if (n1 < n2) {
+        # print the pairs and their correlations
+        cat(n1, ",", n2, round(cormat_df[n1,n2], 4), '\n')  
+      }
+      # increment the counter variable
+      pair_count <- pair_count + 1  
+    }
+  }
+}
+cat('\n', "Number of variable pairs with significant moderate correlation (0.2 - 0.5):", pair_count/2)  # print the total count
+```
+
+According to 'corr.test', 235 pairs of variables have correlation coefficient 
+between 0.2 and 0.7 (exclusive) and statistically significant. 
+This is an intermediate range, where on the one hand the correlation is not very 
+strong to drop one of the variables, meaning they are sufficiently different 
+from each other, and on the other hand there is some correlation between them 
+that is worth investigating and also visually, with the aim of finding patterns 
+in the data. Variables in a range of values lower than 0.2 are considered as
+independent.
+
+
+
+Factorizing:
+
+Nominal variables will be factorized prior to the use in the mathematical function 
+- 'cv.test'(Cramer's V) for calculating correlation coefficients. As a good 
+practice default, I prefer to factorize all nominal variables right after import 
+of data. I didn't do it in this notebook, as variables start with "sw" and "is" 
+which are nominal, were part of the input to 'corr.test' function used before, 
+and this function gets only numeric values. Those binary variables could be 
+considered also as ordinal for the function use, as they have only one distance 
+between their values.
+
+Note: Conversion to Factors needs to be operated after assignment of values to 
+      variables is done, otherwise data type might be changed due to the 
+      assignment.
+      
+
+```{r}
+nominal <- c("site_id", "building_id",  
+                       # all variables that start with 'sw' or 'is' (binary variables)
+                       names(ff_train_agg)[grepl('^(sw|is)', names(ff_train_agg))])
+ff_train_agg[, nominal] <- lapply(ff_train_agg[, nominal], factor)
+```
+
+
+
+**'Cramer's V' (CV)** - a 'Chi-Squared'-based calculation of correlation coefficient 
+for nominal variables.
+
+
+'cv.test' function:
+
+```{r}
+vars_for_cv.test <- c(nominal, 'date')
+
+cats_corr <- NULL
+for (n1 in vars_for_cv.test){
+  for (n2 in vars_for_cv.test){
+    # to prevent correlations between a variable to itself and a correlation of the same pair repeating itself in reverse order 
+    if (n1 < n2) {
+      cats_corr <- rbind(cats_corr, cbind(n1, n2, (round(cv.test(ff_train_agg[[n1]], 
+            ff_train_agg[[n2]]), 4))))
+    }
+  }
+}
+cats_corr <- data.frame(cats_corr)
+cats_corr
+```
+
+
+Pairs of variables that have an absolute correlation coefficient greater than or 
+equal to 0.7 and statistically significant:
+
+```{r}
+# 'which' returns the indices of the rows where both of the conditions are true
+cats_corr[which(abs(as.numeric(cats_corr$Cramer.V)) >= 0.7 & cats_corr$p.value <= 0.05),]
+```
+
+According to 'Cramer's v',pairs of variables that have an absolute correlation 
+coefficient greater than or equal to 0.7 and statistically significant, are 
+'building_id' with all the 'sw_primary_use', that have a full correlation since 
+'sw_primary_use' are attributes of building_id. Also 'building_id' with 'site_id'.
+'date' with 2 date dependent variables - 'is_weekend' with full correlation, 
+and 'is_holiday' with a very high correlation and the only one that is not 
+fully correlated - the reason is holiday dates are different in some of the 
+countries.
+
+
+
+Pairs of variables that have an absolute correlation coefficient between 0.2 and 
+0.7 (exclusive) and statistically significant:
+
+```{r}
+# 'which' returns the indices of the rows where all the conditions are true
+cats_corr[which(abs(as.numeric(cats_corr$Cramer.V)) >= 0.2 & abs(as.numeric(cats_corr$Cramer.V)) < 0.7 & cats_corr$p.value <= 0.05),]
+```
+
+
+#### Outcome
+
+
+Distribution of 'meter_reading_sum' values:
+
+```{r}
+ggplot2::ggplot(data = ff_train_agg, aes(x = meter_reading_sum)) +
+  geom_density()
+```
+
+Resulting distribution is of the 'power law' type. It's heavily biased to the left. 
+It could be to some extent normalized by using 'Log' transformation. '+1' is to 
+avoid minus infinity when the log gets '0' - prevents generation of NAs).
+
+```{r}
+# A new column 
+ff_train_agg$meter_reading_sum_log <- log(ff_train_agg$meter_reading_sum+1)  
+ggplot(data = ff_train_agg, aes(x = meter_reading_sum_log)) +
+  geom_density()
+```
+
+```{r}
+hist(log(ff_train_agg$meter_reading_sum+1))
+```
+
+
+
+#### Outcome variable Vs categories of all categorical variables
+make sure that excel file 'cat_var_before_data_cleansing' is updated.
+
+```{r}
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/meter_reading_sum_log_uni_graphs.pdf")
+
+options(repr.plot.width = 8, repr.plot.height = 8)                        # graph size
+par(mfrow=c(2,2))                                                         # number of rows and columns at the graph
+
+# a csv file stores all the categorical variables - nominal and ordinal
+cat_lst <- read.csv("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/csv files/cat_var_before_data_cleansing.csv")
+prt_df <- ff_train_agg[is.na(ff_train_agg$meter_reading_sum_log) == F,]   # boxplot collapses when NUlls exist at the dependent variable 
+for (v in cat_lst$cat_variables) {                                             
+  boxplot(prt_df$meter_reading_sum_log ~ prt_df[[v]], main = v, cex.main = 0.85)
+}
+par(mfrow=c(1,1))                                                         # show it all at once
+
+dev.off()
+```
+
+Variable that were found to be affect the outcome variable are:
+- 'site_id'
+- 'sw_primary_use_Parking'
+- 'sw_primary_use_ReligiousWorship'
+- 'sw_primary_use_Utility'
+
+
+
+```{r}
+# Deleting the outcome_log column generated earlier
+ff_train_agg$meter_reading_sum_log <- NULL
+```
+
+
+
+
+#### Univariate Outliers
+
+#### Visual determination - **boxplots**
+
+
+'boxplot' function:
+'boxplot' - describes the behavior of numeric variables' distribution
+
+```{r}
+# Cyclical variables (contain "_x_" or "_y_")
+cyclical_vars <- names(ff_train_agg)[grep("_x_|_y_|(_x$|_y$)", names(ff_train_agg))]
+
+# variables that their value distributions have no meaning
+exclude <- c(nominal, "date", cyclical_vars)
+vars_for_boxplot <- setdiff(names(ff_train_agg), exclude)
+
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/boxplot_uni_graphs.pdf")
+
+options(repr.plot.width = 8, repr.plot.height = 8)     # graph size
+par(mfrow=c(2,3))                                      # number of rows and columns at the graph
+
+for(v in vars_for_boxplot) {                                     
+    boxplot(ff_train_agg[[v]], main = v, cex.main = 0.80)                     
+}
+par(mfrow=c(1,1))                                      # show it all at once
+
+dev.off()
+```
+
+
+
+#### Visual determination - **scatter plots** 
+
+'scatter plot' - shows outliers of variables. Horizontal axis is an index.
+
+```{r}
+# For runtime considerations, a random sample of the data is taken:
+set.seed(4)
+sample_df <- ff_train_agg %>% slice_sample(n = 20000)
+# n = 20000; running time 1 min
+
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/scatter_uni_graphs.pdf")
+options(repr.plot.width = 8, repr.plot.height = 8)
+par(mfrow=c(2,3))
+
+# 'date' - too many values that have no meaning at the graph
+for(v in names(ff_train_agg)[!names(ff_train_agg) %in% "date"]) {
+    # '+1' - as 'scatter.smooth' function can't receive zero at y axis, because of log scaling it uses 
+    # 'building_id' represented in the horizontal axis as an index
+    scatter.smooth(as.numeric(sample_df[[v]]) + 1 ~ sample_df$building_id , main = v, ylab = v, 
+        family = "symmetric", lpars = list(col = "red", lwd = 2, lty = 2))
+}
+par(mfrow=c(1,1))
+
+dev.off()
+```
+
+
+
+#### Missing Value Exploration
+
+Stats that help understanding the amount of missing values: 
+
+```{r}
+# Find columns with NAs
+missingCols <- getMissingness(ff_train_agg, getRows = T)
+missingCols$missingness
+```
+
+
+```{r}
+missingCols$message
+```
+
+
+A heatmap of the missing data:
+
+'vis_miss' function:
+
+```{r}
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/Heatmap Missing Percentage Graph.pdf")
+options(repr.plot.width = 25, repr.plot.height = 25)
+
+# subset the data frame to include only the columns that have missing values
+vis_miss(ff_train_agg[, missingCols$missingness$var], warn_large_data = FALSE) + 
+  theme(plot.title = element_text(size = 10), 
+        axis.text.x = element_text(size = 5, angle = 90), 
+        axis.title.y = element_blank())
+
+dev.off()
+```
+
+
+
+Another visualization:
+
+Converting 'date' variable's data type from 'date' to 'int' as it can't receive 
+0, 1 when it's a 'date' data type, in the next chunk:
+
+```{r}
+ff_train_agg$date <- as.integer(ff_train_agg$date) 
+```
+
+
+Following the factorizing operated earlier on 'building_id' column, it now can't 
+receive 0 or 1 for indicating its NA existence, as it doesn't have 0 or 1 as 
+categories. Therefore I will add to the column '0' and '1' as levels, just for 
+that reason.
+
+```{r}
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/Missingness plot.pdf")
+
+ff_train_agg_na <- ff_train_agg
+levels(ff_train_agg_na$building_id) <- c(levels(ff_train_agg_na$building_id), 0, 1)
+
+ff_train_agg_na[!is.na(ff_train_agg_na)] <- 0
+ff_train_agg_na[is.na(ff_train_agg_na)] <- 1
+gg_miss_var <- naniar::gg_miss_var(ff_train_agg_na)
+gg_miss_var
+
+dev.off()
+```
+
+

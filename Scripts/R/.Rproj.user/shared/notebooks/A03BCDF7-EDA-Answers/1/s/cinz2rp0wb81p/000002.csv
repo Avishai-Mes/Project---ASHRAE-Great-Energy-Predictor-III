@@ -1,0 +1,14 @@
+"0","```r
+pdf(\"./Graphs-before completion of data cleansing/Heatmap Missing Graph using 0 and 1.pdf\")
+movies_ff_na <- movies_ff
+# Since column of dtype 'datetime' doesn't accept integers 
+movies_ff_na$release_date <- as.numeric(movies_ff$release_date) 
+movies_ff_na[!is.na(movies_ff_na)] <- 0
+movies_ff_na[is.na(movies_ff_na)] <- 1
+#  since a martrix accept only 0,1
+heatmap(as.matrix(sapply(movies_ff_na,as.numeric)))
+dev.off()
+```"
+"1","null device 
+          1 
+"

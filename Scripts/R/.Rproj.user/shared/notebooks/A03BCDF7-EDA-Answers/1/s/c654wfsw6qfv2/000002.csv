@@ -1,0 +1,23 @@
+"0","```r
+drop_list <- res$var[res$drop == 'Yes']
+for(n in drop_list){
+  # check if there are any outliers in the column
+  if(length(movies_ff[which(outmat[[n]] == 1),n]) ==0){next} 
+  # revenue's value at the 'drop' column is 'NA', which causes revenue to appear in drop_list as 'NA' - leads to error
+  if(is.na(n) | n == \"movie_id\"){next}
+  movies_ff[which(outmat[[n]] == 1),n] <- NA
+}
+keep_list <- res$var[res$drop == 'No']
+special_vars_list <- c(\"keyword_cnt\", \"depart_Art\",\"depart_Camera\",\"depart_Crew\", \"depart_Custom_Mkup\", \"depart_Sound\", \"crew_size\")
+for(n in keep_list){
+  if(is.na(n) | n == \"movie_id\" ){next}
+  if (n %in% special_vars_list){
+    movies_ff[which(outmat[[n]] == 1),n] <- 
+      sapply(movies_ff[which(outmat[[n]] == 1), n], FUN=(function(x){sqrt(x)}))
+  }
+  else{
+  movies_ff[which(outmat[[n]] == 1),n] <- 
+      sapply(movies_ff[which(outmat[[n]] == 1), n], FUN=(function(x){log(x+1)}))
+  }
+}
+```"

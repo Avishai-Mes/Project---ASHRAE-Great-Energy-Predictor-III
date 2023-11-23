@@ -1,0 +1,15 @@
+"0","```r
+pdf(\"./Graphs-after completion of data cleansing/revenue_log_uni_graphs.pdf\")
+options(repr.plot.width = 8, repr.plot.height = 8)       # graph size
+par(mfrow=c(2,3))                                        # number of rows and columns at the graph
+cat_lst <- read.csv(\"./csv files/cat_var.csv\")
+prt_df <- movies_ff[is.na(movies_ff$revenue_log) == F,]   # boxplot collapses when NUlls exist at the dependent variable 
+for (v in cat_lst$movie_id) {                            # 'movie_id' is recognized as a title
+  boxplot(prt_df$revenue_log ~ prt_df[[v]], main=v)
+}
+par(mfrow=c(1,1))                                        # show it all at once
+dev.off()
+```"
+"1","null device 
+          1 
+"

@@ -1,0 +1,16 @@
+"0","```r
+pdf(\"./Graphs-before completion of data cleansing/Heatmap Missing Percentage Graph.pdf\")
+options(repr.plot.width = 25, repr.plot.height = 25)
+vis_miss(movies_ff)+ theme(plot.title = element_text(size = 10), 
+                           axis.text.x = element_text(size = 5, angle=90), 
+                           axis.title.y = element_blank())
+```"
+"1","Warning: `gather_()` was deprecated in tidyr 1.2.0.
+Please use `gather()` instead.
+"
+"0","```r
+dev.off()
+```"
+"1","null device 
+          1 
+"

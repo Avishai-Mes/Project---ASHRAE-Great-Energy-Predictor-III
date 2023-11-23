@@ -1,0 +1,12 @@
+"0","```r
+# character-Categorical + non-binary numeric categorical
+catlst <- append(strlst, \"release_month\")
+catlst <- append(catlst, \"release_day\")
+catlst
+```"
+"1"," [1] \"original_language\"      \"release_date\"           \"runtime_cat\"            \"actor1_prev_revenue\"    \"actor2_prev_revenue\"   
+ [6] \"actor0_prev_revenue\"    \"producers_5y_cnt\"       \"producers_cnt\"          \"producers_5y_revenue\"   \"actors_5y_revenue\"     
+[11] \"depart_Directing_ratio\" \"director_movies_cnt\"    \"actor2_movies_cnt\"      \"actor0_movies_3y_cnt\"   \"depart_Directing\"      
+[16] \"actor1_movies_3y_cnt\"   \"depart_Crew_ratio\"      \"depart_Writing_ratio\"   \"sw_female_actor0\"       \"sw_male_actor0\"        
+[21] \"release_month\"          \"release_day\"           
+"

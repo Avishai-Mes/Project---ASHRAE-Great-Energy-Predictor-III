@@ -1,0 +1,9 @@
+"0","```r
+# Find names of columns with NA
+missingCols <- getMissingness(movies_ff, getRows = T)
+```"
+"1","This dataset has 984 (32.8%) complete rows. Original data has 3000 rows.
+"
+"0","```r
+missingCols$missingness
+```"

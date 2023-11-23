@@ -1,0 +1,6 @@
+"0","```r
+res <- inner_join(data.frame(res1),data.frame(res2),by=\"var\")
+# Adds a column - a condition for dropping or not the outliers
+res$drop <- ifelse(res$distribution_changed==\"+\" & res$correlation_changed==\"+\",\"No\",\"Yes\")
+res
+```"

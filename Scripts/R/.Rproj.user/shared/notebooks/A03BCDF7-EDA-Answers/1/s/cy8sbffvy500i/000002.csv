@@ -1,0 +1,5 @@
+"0","```r
+# check point - following handling of outliers of relevant columns and 
+## categorization of the 'MNAR' variables, that includes the 2 variables with over than 40% of missings
+write.csv(movies_ff,\".\\csv files\\movies_ff_p.csv\", row.names = FALSE)
+```"

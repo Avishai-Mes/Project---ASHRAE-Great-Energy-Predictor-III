@@ -1,0 +1,8 @@
+"0","```r
+# character-Categorical + non-binary numeric categorical
+catlst <- append(strlst, \"release_month\")
+catlst <- append(catlst, \"release_day\")
+catlst
+```"
+"1","[1] \"original_language\" \"runtime_cat\"       \"release_month\"     \"release_day\"      
+"

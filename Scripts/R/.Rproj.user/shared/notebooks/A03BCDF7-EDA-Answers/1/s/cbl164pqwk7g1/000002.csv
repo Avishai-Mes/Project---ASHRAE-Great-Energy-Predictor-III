@@ -1,0 +1,76 @@
+"0","```r
+res2 <- NULL
+outmat <- outlierMatrix(movies_ff)
+for (n in numlst) {
+  out <- movies_ff[[n]]         # the whole data including outliers
+  non <- movies_ff[[n]][which(outmat[[n]]==0)]
+  # make sure that SD !=0 for the use of 'cocor' function
+  if(length(unique(non)) <= 1){next}   
+  revenue_out <- movies_ff$revenue
+  revenue_non <- revenue_out[which(outmat[[n]]==0)]
+  outdf <- data.frame(x_out=out,y_out=revenue_out)
+  nondf <- data.frame(x_non=non,y_non=revenue_non)
+  # a check if there is a difference between 2 correlations
+  cr <- cocor(~ x_out + y_out | x_non + y_non, data=list(outdf, nondf))
+  pval <- cr@fisher1925$p.value
+  res2 <- rbind(res2, cbind(var=n, correlation_changed=ifelse(pval<0.05,\"+\",\"-\")))
+}
+res2
+```"
+"1","      var                         correlation_changed
+ [1,] \"movie_id\"                  \"-\"                
+ [2,] \"budget\"                    \"+\"                
+ [3,] \"popularity\"                \"-\"                
+ [4,] \"runtime\"                   \"-\"                
+ [5,] \"revenue\"                   NA                 
+ [6,] \"sw_web_presence\"           \"-\"                
+ [7,] \"keyword_cnt\"               \"+\"                
+ [8,] \"release_month\"             \"-\"                
+ [9,] \"high_release_month\"        \"-\"                
+[10,] \"release_day\"               \"-\"                
+[11,] \"sw_collection\"             \"-\"                
+[12,] \"producers_cnt\"             \"-\"                
+[13,] \"actor0_movies_cnt\"         \"-\"                
+[14,] \"actor0_movies_3y_cnt\"      \"-\"                
+[15,] \"actor1_movies_cnt\"         \"-\"                
+[16,] \"actor1_movies_3y_cnt\"      \"-\"                
+[17,] \"actor2_movies_cnt\"         \"-\"                
+[18,] \"actor2_movies_3y_cnt\"      \"-\"                
+[19,] \"sw_female_actor1\"          \"-\"                
+[20,] \"sw_female_actor2\"          \"-\"                
+[21,] \"sw_male_actor0\"            \"-\"                
+[22,] \"sw_male_actor1\"            \"-\"                
+[23,] \"sw_male_actor2\"            \"-\"                
+[24,] \"actor0_prev_revenue\"       \"-\"                
+[25,] \"actor1_prev_revenue\"       \"-\"                
+[26,] \"actor2_prev_revenue\"       \"+\"                
+[27,] \"director_movies_cnt\"       \"-\"                
+[28,] \"genre_drama\"               \"-\"                
+[29,] \"genre_comedy\"              \"-\"                
+[30,] \"genre_thriller\"            \"-\"                
+[31,] \"depart_Art\"                \"+\"                
+[32,] \"depart_Camera\"             \"+\"                
+[33,] \"depart_Crew\"               \"+\"                
+[34,] \"depart_Custom_Mkup\"        \"+\"                
+[35,] \"depart_Directing\"          \"-\"                
+[36,] \"depart_Editing\"            \"-\"                
+[37,] \"depart_Production\"         \"-\"                
+[38,] \"depart_Sound\"              \"+\"                
+[39,] \"depart_Writing\"            \"-\"                
+[40,] \"depart_Custom_Mkup_female\" \"-\"                
+[41,] \"depart_Production_female\"  \"-\"                
+[42,] \"producers_5y_cnt\"          \"-\"                
+[43,] \"producers_5y_revenue\"      \"+\"                
+[44,] \"actor_5y_cnt\"              \"-\"                
+[45,] \"actors_5y_revenue\"         \"-\"                
+[46,] \"crew_size\"                 \"+\"                
+[47,] \"depart_Directing_ratio\"    \"-\"                
+[48,] \"depart_Art_ratio\"          \"-\"                
+[49,] \"depart_Writing_ratio\"      \"-\"                
+[50,] \"depart_Sound_ratio\"        \"-\"                
+[51,] \"depart_Crew_ratio\"         \"-\"                
+[52,] \"depart_Custom_Mkup_ratio\"  \"-\"                
+[53,] \"depart_Production_ratio\"   \"-\"                
+[54,] \"depart_Camera_ratio\"       \"-\"                
+[55,] \"depart_Editing_ratio\"      \"-\"                
+"

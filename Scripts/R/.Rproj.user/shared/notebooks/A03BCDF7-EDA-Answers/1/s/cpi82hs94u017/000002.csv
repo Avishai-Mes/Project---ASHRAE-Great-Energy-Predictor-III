@@ -1,0 +1,19 @@
+"0","```r
+cormat_df <- data.frame(dfcormat$r)
+pval_df <- data.frame(dfcormat$p)
+for (n1 in names(cormat_df)){
+  for (n2 in names(cormat_df)){
+    if (is.na(cormat_df[n1,n2])){next}
+    if (cormat_df[n1,n2] >= 0.9 & n1 != n2 & pval_df[n1,n2]<=0.05){
+    cat(n1, \",\", n2, cormat_df[n1,n2], '\n')  # print the variables and their correlations
+  }}}
+```"
+"1","depart_Custom_Mkup , depart_Custom_Mkup_ratio 0.9224407 
+depart_Lighting , depart_Lighting_ratio 0.9937008 
+depart_Visual_Effects , depart_Visual_Effects_ratio 0.9902018 
+director_5y_cnt , directors_5y_revenue 0.9882353 
+directors_5y_revenue , director_5y_cnt 0.9882353 
+depart_Custom_Mkup_ratio , depart_Custom_Mkup 0.9224407 
+depart_Visual_Effects_ratio , depart_Visual_Effects 0.9902018 
+depart_Lighting_ratio , depart_Lighting 0.9937008 
+"

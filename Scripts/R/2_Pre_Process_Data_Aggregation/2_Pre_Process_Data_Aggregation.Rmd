@@ -1,0 +1,378 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+##                    ---  Pre-Process - Data Aggregation  ---
+
+
+
+```{r}
+# Import of packages
+
+library(dplyr)
+library(zoo)
+library(lubridate)
+# 'source' - import local module (R script with functions)
+source("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Scripts/R/utils.R")
+```
+
+
+
+Import of 'train_p' csv file from 'Data' folder:
+
+```{r}
+train_p <- data.frame(read.csv("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/Tables_pre_aggregation/train_p.csv"))  %>%
+  dplyr::select(building_id, date, time_range, time_range_x, time_range_y, everything()) %>%
+  arrange(building_id, date, time_range)
+```
+
+
+
+Normally, missing values should be checked before aggregating the dataset, in 
+order to impute the missing values. Otherwise aggregation will be performed 
+excluding those NAs, like they were dropped before. In 'train_p' table this check 
+is not required since missing values are not possible, as it includes only the 
+outcome variable that must be completed.
+
+
+
+Aggregation on 'train_p':
+
+```{r}
+train_p_agg <- train_p %>%
+  group_by(building_id, date, time_range) %>%
+  summarise(
+    meter_reading_sum = sum(meter_reading),
+    time_range_x_mode = Mode(time_range_x), 
+    time_range_y_mode = Mode(time_range_y)) %>%
+  arrange(building_id, date, time_range) %>%
+  dplyr::select(building_id, date, time_range, time_range_x_mode, time_range_y_mode, everything())
+```
+
+
+
+Import of 'weather_train_p' csv file from 'Data' folder:
+
+```{r}
+weather_train_p <- data.frame(read.csv("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/Tables_pre_aggregation/weather_train_p.csv")) %>%
+  dplyr::select(site_id, date, time_range, time_range_x, time_range_y, everything()) %>%
+  arrange(site_id, date, time_range)
+```
+
+
+Missing values existence in 'weather_train_p' needs to be checked before 
+aggregation, in order to impute the missing values. Otherwise aggregation will 
+be performed excluding those rows, like they were dropped before.
+
+```{r}
+# A function within 'utils'. Originally from 'mechkar' package.
+mm <-getMissingness(weather_train_p)
+mm
+```
+
+In the EDA process I would delete rows from the dataset where there is less than 
+1% of missing values in a column. Here I decide to keep those rows since it's 
+possible they are a sequence of 8 or more hours which will result in an entire 
+time range missing from the dataset, when I will later join the table with 
+'train_p' table. I prefer not to lose an entire time range.
+
+
+Rows handling:
+
+The following is a check for the amount of missing values per **row** in 
+'weather_train_p'. Based on that, a decision if there are any **rows to be dropped** 
+will be made. 
+
+```{r}
+# A new data frame of missing values
+weather_train_p_na <- missingMatrix(weather_train_p)
+weather_train_p_na_rows <- weather_train_p_na 
+# A new column - percent of missing values in each row
+weather_train_p_na_rows$pct <- round((rowSums(weather_train_p_na) / ncol(weather_train_p_na)) * 100, 1)
+# Groups the data by the "pct" column and counts the number of rows with each percentage of missing values
+# Rows that have 50% or more of missing vakues will be dropped later
+weather_train_p_na_rows %>% group_by(pct) %>% tally
+```
+
+In the EDA process I would delete rows from the dataset where there is 50% or 
+more of missing values in a row. As exhibited above, there are 35 rows with 50% 
+or more of missing values. I decide to keep those rows since it's possible they 
+are a sequence of 8 or more hours which will result in an entire time range 
+missing from the flat file, when I will later join the table with the 'train_p' 
+table. I prefer not to lose an entire time range in the final flat file.
+
+
+In summary, 9 columns have missing values. These columns, divided into categories, 
+are:
+
+Category 1: 
+Variables whose values are changed gradually over time, therefore will be imputed 
+by linear interpolation, based on the arrangement of the rows according to the 
+time sequence. The relationship of these variables to time is much greater than 
+to other variables, therefore this kind of imputation is better than using 'KNN'. 
+In this category are:
+
+1.  'air temperature'
+2.  'cloud_coverage'
+3.  'dew_temperature'
+4.  'precip_depth_1_hr'
+5.  'sea_level_pressure' 
+6.  'wind_speed'
+7.  'rel_humid'
+
+
+Category 2: 
+Variables whose values DO NOT change gradually over time. These missing values 
+amount will probably be reduced by the aggregation over 8 hours that will be 
+later performed. The aggregation itself will remove some of the missing values, 
+by the union of rows, maybe all of them. If there still be missing values after, 
+they will be filled in by 'KNN' imputation later on. In this category are:
+
+8. 'wind_direction x'
+9. 'wind_direction y'
+
+
+
+Category 1 - Imputation:
+
+```{r}
+# A linear interpolation of a sequence of NA values delimited by two values, using 'na.approx' function   
+weather_train_p <- weather_train_p %>%
+  mutate(
+  air_temperature = zoo::na.approx(air_temperature, na.rm = FALSE),
+  cloud_coverage = round(zoo::na.approx(cloud_coverage, na.rm = FALSE), 0),       # 'round' - to keep results as an integer like the original values
+  dew_temperature = zoo::na.approx(dew_temperature, na.rm = FALSE),
+  precip_depth_1_hr = round(zoo::na.approx(precip_depth_1_hr, na.rm = FALSE), 0), # 'round' - to keep results as an integer like the original values
+  sea_level_pressure = zoo::na.approx(sea_level_pressure, na.rm = FALSE),
+  wind_speed = zoo::na.approx(wind_speed, na.rm = FALSE)
+  )
+  
+# Define a function Performs 2 methods of imputation on 'rel_humid' column
+# The two options are: 1. calculating 'rel_humid' by a linear interpolation using the Time Series. 2. By its formula, based on the imputed columns the formula consists of
+# Using a Boolean flag to easily switch between 2 methods in later use by the model
+impute_rel_humid_switch <- function(weather_train_p, flag) { 
+  if (flag == 'linear interpolation') {
+    weather_train_p <- weather_train_p %>%
+    mutate(rel_humid = zoo::na.approx(rel_humid, na.rm = FALSE))
+  } 
+  else if (flag == 'formula') {
+    weather_train_p <- weather_train_p %>%
+      mutate(rel_humid = round((100 * (6.11 * 10^(7.5 * dew_temperature / (237.7 + dew_temperature))) / (6.11 * 10^(7.5 * air_temperature / (237.7 + air_temperature)))), 1))
+  }    
+       else {
+           stop("Invalid flag value. Please enter either 'linear interpolation' or 'formula'.")
+       }
+  return(weather_train_p)
+}
+
+# Call 'impute_rel_humid_switch' function 
+weather_train_p <- impute_rel_humid_switch(weather_train_p, 'linear interpolation')
+```
+
+
+'na.approx' function does not impute first and last rows of the dataset, therefore 
+those need to be manually imputed. In first rows only 'precip_depth_1_hr' has 
+missing data - 2 NAs, and need to be manually imputed, based on the next non-NA 
+value, 0, carrying backward.
+
+```{r}
+weather_train_p$precip_depth_1_hr[1:2] <- 0
+```
+
+
+
+```{r}
+# A check whether there are any NAs at last rows of the dataset, that need to be imputed
+weather_train_p %>% tail(100)
+```
+
+In last rows, the following features have missing data, and need to be manually 
+imputed, based on the previous non-NA value carrying forward:
+
+cloud_coverage    - 3  NAs;  previous non-NA value: 2 
+precip_depth_1_hr - 54 NAs;  previous non-NA value: 5  -> I prefer to use the 
+                                                          most frequent value, 0, 
+                                                          instead, as in this case 
+                                                          it's not reliable to 
+                                                          take the previous non-NA. 
+
+
+```{r}
+N <- nrow(weather_train_p)
+# Manual imputation based on the previous non-NA value carrying forward.
+weather_train_p$cloud_coverage[(N-2) : N] <- 2
+weather_train_p$precip_depth_1_hr[(N-53) : N] <- 0
+# A final check
+weather_train_p %>% tail(60)
+```
+
+
+
+
+Aggregation on 'weather_train_p'
+Groups hourly data by 8-hour intervals:
+
+```{r}
+weather_train_p_agg <- weather_train_p %>%
+    group_by(site_id, date, time_range) %>%
+    summarise(
+      # sum, min, max,  and sd aggregations
+      precip_depth_sum = sum(precip_depth_1_hr),
+      precip_depth_min = min(precip_depth_1_hr),
+      precip_depth_max = max(precip_depth_1_hr),
+      precip_depth_sd = sd(precip_depth_1_hr),
+
+      # mean, min, max, and sd aggregations
+      air_temperature_mean = mean(air_temperature),
+      air_temperature_min = min(air_temperature),
+      air_temperature_max = max(air_temperature),
+      air_temperature_sd = sd(air_temperature),
+      
+      dew_temperature_mean = mean(dew_temperature),
+      dew_temperature_min = min(dew_temperature),
+      dew_temperature_max = max(dew_temperature),
+      dew_temperature_sd = sd(dew_temperature),
+      
+      sea_level_pressure_mean = mean(sea_level_pressure),
+      sea_level_pressure_min = min(sea_level_pressure),
+      sea_level_pressure_max = max(sea_level_pressure),
+      sea_level_pressure_sd = sd(sea_level_pressure),
+      
+      wind_speed_mean = mean(wind_speed),
+      wind_speed_min = min(wind_speed),
+      wind_speed_max = max(wind_speed),
+      wind_speed_sd = sd(wind_speed),
+      
+      rel_humid_mean = mean(rel_humid),
+      rel_humid_min = min(rel_humid),
+      rel_humid_max = max(rel_humid),
+      rel_humid_sd = sd(rel_humid),
+  
+      # mode, min, max, and sd aggregations
+      cloud_coverage_mode = Mode(cloud_coverage),
+      cloud_coverage_min = min(cloud_coverage),
+      cloud_coverage_max = max(cloud_coverage),
+      cloud_coverage_sd = sd(cloud_coverage),
+      
+      # mode aggregations
+      wind_direction_x_mode = Mode (wind_direction_x),
+      wind_direction_y_mode = Mode (wind_direction_y),
+      
+      elevation_mode = Mode(elevation),
+      
+      time_range_x_mode = Mode(time_range_x), 
+      time_range_y_mode = Mode(time_range_y)) %>%
+         arrange(site_id, date, time_range) %>%
+            dplyr::select(site_id, date, time_range, time_range_x_mode, time_range_y_mode, everything())
+```
+
+
+
+
+A check of missing values in 'weather_train_p' and 'weather_train_p_agg':
+
+```{r}
+# count the number of missing values in each column of ff_train
+colSums(is.na(weather_train_p))
+```
+
+Missing values status at 'weather_train_p':
+
+wind_direction_x - 6268 NAs
+wind_direction_y - 6268 NAs
+
+
+```{r}
+# count the number of missing values in each column of 'weather_train_p_agg'
+colSums(is.na(weather_train_p_agg))
+```
+
+Missing values status at 'weather_train_p_agg':
+
+precip_depth_sd       - 24 NAs
+air_temperature_sd    - 24 NAs
+dew_temperature_sd    - 24 NAs
+sea_level_pressure_sd - 24 NAs
+wind_speed_sd         - 24 NAs
+rel_humid_sd          - 24 NAs
+cloud_coverage_sd     - 24 NAs
+wind_direction_x_mode - 6  NAs
+wind_direction_y_mode - 6  NAs
+
+
+
+Following the aggregation operation all 'sd' columns have 24 missing values, 
+where the pre-aggregation (original) 'sd' columns have no missing values at all. 
+'sd' function returns 'NA' when its input is a vector of length 0 or 1. 
+I will test the hypothesis of existence of a single-value vector (1 row) as an 
+input to the 'sd' aggregations, on a particular column in a specific row resulted 
+by the aggregation.
+
+
+
+```{r}
+# Exhibit all the rows where 'precip_depth_sd' has NAs at the aggregated table
+weather_train_p_agg[is.na(weather_train_p_agg$precip_depth_sd),]
+```
+
+The rows above are results of the aggregations. As a test, I'll sample the first 
+row above to see how many rows at 'weather_train_p' were at the same group created 
+that first row by the 'sd' aggregation. If I get 1 row at that group, that would 
+explain the NA recieved following the aggregation.
+
+```{r}
+weather_train_p %>%
+  filter(site_id == 2 & date == "2016-12-31" & time_range == '3')
+```
+
+Only one row (one-value vector) is obtained, on which the 'sd' aggregation was 
+performed, therefore this explains the 'NA' value obtained in the aggregation 
+result. Additional similar tests on aggregated rows yielded the same results. I 
+assume this is the reason in the other 'NAs' obtained due to 'sd' aggregations 
+as well. I will place '0' instead of those 'NAs' values, as mathematically, 
+Standard Deviation (sd) of a single value is '0'.
+
+
+```{r}
+weather_train_p_agg <- weather_train_p_agg %>%
+  mutate(precip_depth_sd = ifelse(is.na(precip_depth_sd), 0, precip_depth_sd),
+         air_temperature_sd = ifelse(is.na(air_temperature_sd), 0, air_temperature_sd),
+         dew_temperature_sd = ifelse(is.na(dew_temperature_sd), 0, dew_temperature_sd),
+         sea_level_pressure_sd = ifelse(is.na(sea_level_pressure_sd), 0, sea_level_pressure_sd),
+         wind_speed_sd = ifelse(is.na(wind_speed_sd), 0, wind_speed_sd),
+         rel_humid_sd = ifelse(is.na(rel_humid_sd), 0, rel_humid_sd),
+         cloud_coverage_sd = ifelse(is.na(cloud_coverage_sd), 0, cloud_coverage_sd))
+```
+
+
+
+```{r}
+# count the number of missing values in the columns of 'weather_train_p_agg'
+colSums(is.na(weather_train_p_agg))
+```
+
+At this point only 'wind_direction_x_mode' and 'wind_direction_y_mode' columns 
+have missing values. 
+
+
+
+Export of 'train_p_agg' and 'weather_train_p_agg' tables as csv files to 'data' 
+folder, for the flat file to be create by 'join' in 'SQLiteStudio':
+
+```{r}
+# Save 'train_p_agg' table as a CSV file
+train_p_agg_path <- "C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/Tables_post_aggregation/train_p_agg.csv"
+write.csv(train_p_agg, file = train_p_agg_path, row.names = FALSE)
+
+# Save 'weather_train_p_agg' table as a CSV file
+weather_train_p_agg_path <- "C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/Tables_post_aggregation/weather_train_p_agg.csv"
+write.csv(weather_train_p_agg, file = weather_train_p_agg_path, row.names = FALSE)
+
+# Confirm that both CSV files were created
+file.exists(train_p_agg_path)
+file.exists(weather_train_p_agg_path)
+```
+

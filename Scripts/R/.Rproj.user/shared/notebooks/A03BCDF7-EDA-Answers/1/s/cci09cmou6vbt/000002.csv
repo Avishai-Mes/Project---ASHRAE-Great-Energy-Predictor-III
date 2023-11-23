@@ -1,0 +1,30 @@
+"0","```r
+# Columns to be categorized
+cols_to_categorize <- mnar
+
+for(n in cols_to_categorize){
+  # summary on the column. the output is a table of one row.
+  # The row contains all the statistics. Q1,Q2,Q3 is saved.
+  summary_of_col <- summary(movies_ff[[n]])
+  Q1 <- summary_of_col[2] 
+  Q2 <- summary_of_col[3]
+  Q3 <- summary_of_col[5]
+  
+  # Categorization for the column by splitting it to quarters.
+  new_col <- movies_ff[[n]]
+  if((Q1 != Q2) & (Q2 != Q3)) {
+    new_col <- cut(as.numeric(new_col), breaks=c(-Inf,Q1,Q2,Q3,Inf), 
+      labels=c(\"A\",\"B\",\"C\",\"D\"))
+  new_col <- as.character(new_col)
+  }
+  # In some variables Q1 = Q2, therefore Q1 is not functioning as a break
+  if((Q1 == Q2) & (Q2 != Q3)) {
+    new_col <- cut(as.numeric(new_col), breaks=c(-Inf,Q2,Q3,Inf), 
+      labels=c(\"A\",\"C\",\"D\"))
+  new_col <- as.character(new_col)
+  }
+  # 'NA' will be labeled as \"unknown\"
+  new_col[is.na(new_col)] <- 'unknown'
+  movies_ff[[n]] <- new_col
+}
+```"

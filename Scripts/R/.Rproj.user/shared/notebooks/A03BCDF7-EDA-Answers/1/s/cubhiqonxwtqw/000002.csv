@@ -1,0 +1,8 @@
+"0","```r
+# a new data frame of the missings
+movies_ff_na <- missingMatrix(movies_ff)
+movies_ff_na_sum <- movies_ff_na 
+# a new column - percent of missings in each row
+movies_ff_na_sum$pct <- rowSums(movies_ff_na)/ncol(movies_ff_na)
+movies_ff_na_sum %>% group_by(pct) %>% tally
+```"

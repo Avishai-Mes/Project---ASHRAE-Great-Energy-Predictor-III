@@ -1,0 +1,11 @@
+"0","```r
+library (odbc)
+library (DBI)
+con <- dbConnect(odbc(),
+            Driver = \"SQL Server Native Client 11.0\",
+            Server = \"100.24.57.162\", 
+            Database = 'BoxOffice',
+            UID = 'dsuser14',     
+            PWD = 'DSuser14!',    
+            Port = 1433)
+```"

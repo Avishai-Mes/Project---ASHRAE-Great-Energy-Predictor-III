@@ -1,0 +1,440 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+##                          ---  Time Series Handling  ---
+
+
+
+```{r}
+# Import packages
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(DBI)
+library(naniar)
+library(gridExtra)
+library(grid)  # Load the 'grid' package
+library(tseries)
+library(urca)
+library(vars)
+source("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Scripts/R/utils.R")
+```
+
+
+
+
+Import of 'ff_train_agg' dataset from check point 1:
+
+```{r}
+ff_train_agg <- data.frame(read.csv("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Data/CheckPoint1/ff_train_agg.csv"))
+ff_train_agg
+```
+
+
+
+Nominal variables:
+
+```{r}
+nominal <- c("site_id", "building_id",  
+                 # all variables that start with 'sw' or 'is' (binary variables)
+                    names(ff_train_agg)[grepl('^(sw|is)', names(ff_train_agg))])
+nominal
+```
+
+
+Factorizing:
+As a good practice, all the variables that are nominal will be factorized right 
+after import of the data and right after new nominal variables are created. 
+Nominal variables should be factorized, to be ready for a use in mathematical
+functions.
+
+```{r}
+# Factorize columns in the updated 'nominal' 
+ff_train_agg[, nominal] <- lapply(ff_train_agg[, nominal], factor)
+```
+
+
+
+```{r}
+ff_train_agg$date <- as.Date(ff_train_agg$date)
+```
+
+
+
+
+Here I will exhibit graphs for all the time-based variables versus time. Each 
+time point on x axis is a time range (out of 3) in a specific date. Each time 
+range is represented by 'time_range_x_mode' and 'time_range_y_mode' variables 
+which are the horizontal and the vertical components of the polar representation 
+of time range. 
+
+Preparation for creating the time-based variable graphs:
+
+```{r}
+# The following variables: 'site_id', 'date', 'time_range_x_mode', 'time_range_y_mode' are necessary for the 'group_by' operation to be performed later
+time_vars <- c('site_id', 'date', 'time_range_x_mode', 'time_range_y_mode', 'precip_depth_sum', 'precip_depth_min', 'precip_depth_max', 'precip_depth_sd', 'air_temperature_mean', 'air_temperature_min', 'air_temperature_max', 'air_temperature_sd', 'dew_temperature_mean', 'dew_temperature_min', 'dew_temperature_max', 'dew_temperature_sd', 'sea_level_pressure_mean', 'sea_level_pressure_min', 'sea_level_pressure_max', 'sea_level_pressure_sd', 'wind_speed_mean', 'wind_speed_min', 'wind_speed_max', 'wind_speed_sd', 'rel_humid_mean', 'rel_humid_min', 'rel_humid_max', 'rel_humid_sd', 'cloud_coverage_mode', 'cloud_coverage_min', 'cloud_coverage_max', 'cloud_coverage_sd', 'wind_direction_x_mode', 'wind_direction_y_mode')
+
+temp_df <- ff_train_agg[,time_vars]
+
+# Remove duplicate rows from 'temp_df', that caused by multiple building_id at the same site
+temp_df <- distinct(temp_df)
+temp_df <- temp_df %>% group_by(site_id) %>% mutate(row_num = row_number()) %>% 
+  ungroup()
+```
+
+
+
+A check that makes sure there are no duplicates per time ('time_range_x_mode', 
+'time_range_y_mode') & location (site_id)":
+
+```{r}
+temp_df %>% group_by(site_id, date, time_range_x_mode, time_range_y_mode) %>%
+  count() #%>% filter(n > 1)
+```
+
+No duplicated rows per time and location. 
+
+
+
+Graphs for all time-based variables:
+
+```{r}
+pdf("C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Graphs-before completion of data cleansing/line_plots_combinations_vars_date.pdf")
+
+# Create an empty list to store the line plots for each site_id 
+line_plots <- list()
+plot_count <- 0
+
+unique_site_ids <- unique(temp_df$site_id)
+
+for (var_y in time_vars) {
+  # Those 4 variables are in 'time_vars' for the 'group_by' operation, but I don't want them in the graphs
+  if(var_y %in% c('site_id', 'date', 'time_range_x_mode', 'time_range_y_mode')){next}
+  for (i in unique_site_ids) {
+    plot_data <- temp_df %>% filter(site_id == i)
+    # Create the plot for the current 'var_y' and 'site_id'
+    line_plot <- ggplot(plot_data, aes(x = row_num, y = .data[[var_y]])) +
+      geom_line() +
+      labs(x = "Time", y = var_y, title = paste("Site ID:", i)) +
+      theme(plot.title = element_text(size = 10),
+            axis.text.x = element_text(size = 5),
+            axis.text.y = element_text(size = 5))
+    
+    line_plots[[length(line_plots) + 1]] <- line_plot
+    plot_count <- plot_count + 1
+    # Add a blank page after every 2 graphs
+    if (plot_count %% 2 == 0 || i == unique_site_ids[length(unique_site_ids)]) {
+      # Create a grid arrangement for the line plots stored in the 'line_plots' list
+      line_grid <- do.call(grid.arrange, c(line_plots, nrow = 2))
+      # Clear the line plots list for the next page
+      line_plots <- list()
+    }
+  }
+}
+dev.off()  
+```
+
+
+Now 2 Stationarity tests: 'KPSS' and 'ADF' will be performed, using 'ur.kpss' 
+and 'ur.df' functions, respectively, taken from 'urca' library .
+
+
+'KPSS' test:
+
+Null Hypothesis (H0): the time series data is stationary around a deterministic 
+trend.
+
+Alternative Hypothesis (H1): the time series data is not stationary, meaning it 
+has a unit root or a non-stationary trend.
+
+The test produces a test statistic value, that can be compared with critical value 
+linked to a specific p value chosen out of 4 options: 1 pct, 2.5 pct, 5 pct and 
+10 pct. 5 pct is chosen here. The critical value is used to determine stationarity 
+or non-stationarity at the test. If the calculated test statistic is higer than 
+the critical value, null hypothesis of stationarity can be rejected and can be 
+concluded that data is "non-stationary" at the specified significance level. If 
+the test statistic is lower than the critical value, rejection of the null 
+hypothesis is failed.
+
+
+
+'ADF' test:
+
+The null and alternative hypotheses for the ADF test are as follows:
+
+Null Hypothesis (H0): The time series data has a unit root (non-stationary).
+
+Alternative Hypothesis (H1): The time series data is stationary, meaning it does 
+not have a unit root.
+
+The test produces a test statistic value, that can be compared with critical value 
+linked to a specific p value chosen out of 3 options: 1 pct, 5 pct and 10 pct. 
+5 pct is chosen here. The critical value is used to determine non-stationarity 
+or stationarity at the test. If the calculated test statistic is lower than the 
+critical values, null hypothesis of non-stationarity can be rejected and can be 
+concluded that data is "stationary" at the specified significance level. If the 
+test statistic is higher than the critical values, rejection of the null 
+hypothesis is failed.
+
+
+The two types of tests I perform here is applied to filtered data grouped by 
+'site_id' and counts about 1090 rows in each 'site_id' subset, on which the test 
+is calculated.
+
+
+```{r}
+# 2 Stationarity tests: 'KPSS' and 'ADF'
+
+# Initialize an empty data frame to store the results
+kpss_results <- data.frame(
+  Variable = character(0),
+  Site_ID = numeric(0),
+  Test_Statistic = numeric(0),
+  Critical_Value_5pct = numeric(0),
+  Lag = numeric(0),
+  Is_Stationary_KPSS = character(0))  
+
+adf_results <- data.frame(
+  Variable = character(0),
+  Site_ID = numeric(0),
+  Test_Statistic = numeric(0),
+  Critical_Value_5pct = numeric(0),
+  Lag = numeric(0),
+  Is_Stationary_ADF = character(0))
+
+for (var in time_vars) {
+  if (var %in% c('site_id', 'date', 'time_range_x_mode', 'time_range_y_mode')) {next}
+  for (i in unique_site_ids) {
+    test_data <- temp_df %>% filter(site_id == i)
+    # Convert the column to a 'time series' object
+    test_data <- ts(na.omit(test_data[[var]])) 
+    
+    # Perform the 'KPSS' test
+    # type = "mu": When it's not known that there is a trend in the data
+    # lags = "short": Checks all the lags up to the maximum defined for it by "short"
+    kpss_result <- ur.kpss(y = test_data, type = "mu", lags = "short")  
+    
+    # Extract outputs
+    test_statistic <- kpss_result@teststat
+    # The range calculated due to lags = "short" defined at the function's argument
+    lag_kpss <- kpss_result@lag
+    critical_value_5pct <- kpss_result@cval[,"5pct"]     # @ 5 pct significance level
+
+    # Determine if the time series is stationary
+    is_stationary_kpss <- ifelse(test_statistic > critical_value_5pct, "No", "Yes")
+
+    # Append the results to the data frame
+    kpss_results <- rbind(kpss_results, data.frame(Variable = var,
+                                                   Site_ID = i,
+                                                   Test_Statistic = test_statistic, 
+                                                   Critical_Value_5pct = critical_value_5pct,
+                                                   Lag = lag_kpss,
+                                                   Is_Stationary_KPSS = is_stationary_kpss))
+    
+    # Perform the 'ADF' test
+    # type = "none": When it's not known that there is a trend in the data
+    # To be consistent, I choose the same lag's range chosen in 'KPSS' test
+    ur_df_result <- ur.df(y = test_data, type = "none", lags = lag_kpss) 
+        
+    # Extract outputs
+    test_statistic <- ur_df_result@teststat[, "tau1"]    # 'tau1' is for "type = none" chosen before
+    lag_adf <- ur_df_result@lags                         # Lag's range
+    critical_value_5pct <- ur_df_result@cval[1,"5pct"]   # @ 5 pct significance level
+
+    # Determine if the time series is stationary
+    is_stationary_adf <- ifelse(test_statistic < critical_value_5pct, "Yes", "No")
+
+    # Append the results to the data frame
+    adf_results <- rbind(adf_results, data.frame(Variable = var,
+                                                 Site_ID = i,
+                                                 Test_Statistic = test_statistic, 
+                                                 Critical_Value_5pct = critical_value_5pct,
+                                                 Lag = lag_adf,
+                                                 Is_Stationary_ADF = is_stationary_adf))
+  }
+}
+kpss_results
+adf_results
+```
+
+
+Above are the results of the 2 tests for each variable in each of the 10 sites. 
+To decide whether a variable is stationary or not, I will hold a vote for each 
+variable among the 20 results relevant to it, out of 10 sites in each of the 2
+types of test.
+
+```{r}
+# Combine the results of both tests
+combined_results <- merge(kpss_results, adf_results, by = c("Variable", "Site_ID"))
+
+# Function to determine variable's stationarity based on voting
+decide_is_stationary <- function(variable) {
+  var_results <- combined_results %>%
+  filter(Variable == variable) %>%
+  dplyr::select(Is_Stationary_KPSS, Is_Stationary_ADF)
+  
+  # Count the number of "stationary" and "non-stationary" labels
+  count_stationary <- sum(var_results$Is_Stationary_KPSS == "Yes") + sum(var_results$Is_Stationary_ADF == "Yes") 
+  count_non_stationary <- sum(var_results$Is_Stationary_KPSS == "No") + sum(var_results$Is_Stationary_ADF == "No")
+  
+  # Determine if the variable is stationary based on voting
+  if (count_stationary > count_non_stationary) {
+    return("Stationary")} 
+  else if (count_stationary == count_non_stationary) {
+    return("Equality between the results")} 
+  else {
+    return("Non-Stationary")}
+}
+
+# Get unique variables
+unique_variables <- unique(combined_results$Variable)
+
+# Create a data frame with variables and their stationarity decision
+stationarity_decision <- data.frame(Variable = unique_variables)
+# sapply is used to apply the 'decide_is_stationary' function to each unique variable in the 'stationarity_decision$Variable' column
+stationarity_decision$Decision <- sapply(stationarity_decision$Variable, decide_is_stationary)
+stationarity_decision
+
+# Get the list of non-stationary variables
+non_stationary_vars <- stationarity_decision$Variable[stationarity_decision$Decision == "Non-Stationary"]
+non_stationary_vars
+```
+
+Two variables: "dew_temperature_sd" and "wind_speed_max" had equality between the 
+results in the 20 tests (KPSS and ADF in 10 sites), I will decide about them 
+according to the following judgment:
+
+- 'dew_temperature_sd' - hard to tell from the graphs. The other 'dew_temperature' 
+  variables came out 'non-stationary', so I will decide according to them and 
+  determine that it is also 'non-stationary'.
+
+- 'wind_speed_max' - hard to tell from the graphs. Its nature is similar to that 
+  of 'wind_speed_mean' and 'wind_speed_min' that are 'stationary', therefore I 
+  will decide according to them and determine that it is also 'stationary'.
+
+
+```{r}
+# Append 'dew_temperature_sd' to 'non_stationary_vars'
+non_stationary_vars <- c(non_stationary_vars, 'dew_temperature_sd')
+non_stationary_vars
+```
+
+
+
+Now I will check whether it is possible to apply the 'Vector Autoregression' (VAR) 
+function on the non-stationary variables. The purpose of applying 'VAR' is to 
+find the significant lags of each variable and then transform the dataset into a 
+regular tabular dataset, by carrying data forward from the significant lags to 
+the current row in the dataset and storing it in new columns. Basically this move 
+will improve the explained variance of the dataset and there will be no more 
+dependence on information from the past at the non-stationary variables.
+
+'VAR' is a model that allows analysis of multivariable. To use this function two 
+conditions must be met: 
+
+1. Each variable has an autocorrelation. 
+2. There is a correlation between the various variables.
+
+I will examine these conditions.
+
+
+An Autocorrelation test:
+
+"Box.test" function -
+Is used for the "Box-Pierce or Ljung-Box" hypothesis test, which is a statistical 
+test used in time series analysis to check for the presence of autocorrelation 
+in a time series data set. The test checks whether the autocorrelations of the 
+time series up to a specified lag are jointly equal to zero. That indicates -
+no significant autocorrelation.
+
+Null Hypothesis (H0): The time series data is independent. There is no 
+autocorrelation (no significant serial correlation).
+
+Alternative Hypothesis (H1): The time series data is not independent. There is 
+an autocorrelation (significant serial correlation).
+
+Lags: Specify the number of lags you want to include in the test. The number 
+of lags determines how many lagged values of the time series are used in the test.
+
+
+'Box.test' function:
+
+```{r}
+# Initialize an empty data frame to store the results
+box_test_results <- data.frame(Variable = character(0),
+                               Site_ID = numeric(0),
+                               Test_Statistic = numeric(0),
+                               P_Value = numeric(0),
+                               Has_Autocorrelation = character(0))  
+
+# Loop through non-stationary variables and perform the 'Box-Pierce or Ljung-Box' test
+for (var in non_stationary_vars) {
+  for (i in unique_site_ids) {
+    test_data <- temp_df %>% filter(site_id == i)
+    # Convert the column to a 'time series' object
+    test_data <- ts(na.omit(test_data[[var]]))
+    # This is the maximum range chosen in the class using 'VAR'
+    lag <- 15
+    
+    # Perform the 'Box-Pierce or Ljung-Box' test
+    # 'lag' - range of history
+    box_test_result <- Box.test(test_data, lag = lag, type = "Ljung-Box")  
+    
+    # Extract outputs
+    test_statistic <- as.double(box_test_result$statistic)    # A trick to extract from 'Box.test' result
+    p_value <- box_test_result$p.value 
+    
+    # 'parameter' - the degrees of freedom of the approximate chi-squared distribution of the test statistic (taking fitdf into account)
+    has_autocorrelation <- ifelse(test_statistic < qchisq(.95, df = box_test_result$parameter),"Yes","No")
+    # Append the results to the data frame
+    box_test_results <- rbind(box_test_results, data.frame(Variable = var,
+                                                           Site_ID = i,
+                                                           Test_Statistic = test_statistic,
+                                                           P_Value = p_value,
+                                                           Has_Autocorrelation = has_autocorrelation))
+  }
+}
+# Print or analyze the results as needed
+box_test_results
+```
+
+Above are the results of the tests for each variable in each of the 10 sites. 
+To get a final decision whether a variable has autocorrelation or not, I will 
+hold a vote for each variable among the 10 results (10 sites) relevant to it.
+
+```{r}
+# Initialize an empty data frame to store the results
+autocorrelation_decision <- data.frame(Variable = character(0),
+                                       Has_Autocorrelation = character(0))
+
+# Loop through non-stationary variables
+for (var in non_stationary_vars) {
+  # Extract results for the current variable from 'box_test_results'
+  var_results <- box_test_results[box_test_results$Variable == var, ]
+  
+  # Count the number of results with autocorrelation and without autocorrelation
+  count_autocorrelation <- sum(var_results$Has_Autocorrelation == "Yes")
+  count_no_autocorrelation <- sum(var_results$Has_Autocorrelation == "No")
+  
+  # Determine if the current variable has autocorrelation based on voting
+  if (count_autocorrelation > count_no_autocorrelation) {
+    autocorrelation_decision <- rbind(autocorrelation_decision, data.frame(Variable = var, Has_Autocorrelation = "Yes"))} 
+  else if (count_autocorrelation == count_no_autocorrelation) {
+    autocorrelation_decision <- rbind(autocorrelation_decision, data.frame(Variable = var, Has_Autocorrelation = "Equality between the results"))} 
+  else {autocorrelation_decision <- rbind(autocorrelation_decision, data.frame(Variable = var, Has_Autocorrelation = "No"))}
+}
+autocorrelation_decision
+```
+
+
+All the non-stationary variables have no autocorrelation, thus 'VAR' model cannot 
+be applied. Therefore, the planned correction of carrying the historical data
+forward to the present, will not be applied to the dataset.
+
+
+

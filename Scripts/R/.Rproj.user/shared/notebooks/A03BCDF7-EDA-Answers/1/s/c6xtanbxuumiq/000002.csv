@@ -1,0 +1,3 @@
+"0","```r
+cats_corr[which(cats_corr$Cramer.V > 0.9 & cats_corr$p.value < 0.05), ]
+```"

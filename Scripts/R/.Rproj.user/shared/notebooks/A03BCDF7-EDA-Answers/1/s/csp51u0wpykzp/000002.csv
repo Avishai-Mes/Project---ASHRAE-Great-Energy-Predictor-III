@@ -1,0 +1,91 @@
+"0","```r
+# IQR (boxplot)
+outlierMatrix <- function(data,threshold=1.5) {
+    vn <- names(data)
+    outdata <- data.frame(row1=1:nrow(data))
+    for(v in vn) {
+        if(is.numeric(data[[v]])) {
+            outlow <- quantile(data[[v]],probs = 0.25,na.rm = T) 
+            outhigh <- quantile(data[[v]],probs = 0.75, na.rm = T)
+            irq_level <- (outhigh - outlow) * threshold
+            outlow <- outlow - irq_level
+            outhigh <- outhigh + irq_level
+            mv <- ifelse(data[[v]] < outlow | data[[v]] > outhigh, 1, 0)
+            outdata[v] <- mv
+        } else {
+            # This should be added to the 'outdata' as well,But there is no need because 
+            ## non-numeric values are not handled anyway 
+            mv <- rep(0,nrow(data))  # non-numbers gets 0 as they can't be outliers
+        }
+    }
+    outdata$row1 <- NULL
+    return(outdata)
+}
+
+# ----------------------------------------------------------------------------
+
+# could be a way shorter code
+missingMatrix <- function(data) {
+    vn <- names(data)
+    missdata <- data.frame(row1=1:nrow(data))
+    for(v in vn) {
+        mv <- ifelse(is.na(data[[v]]),1,0)
+        missdata[v] <- mv
+    }
+    missdata$row1 <- NULL
+    return(missdata)
+}
+
+
+# ----------------------------------------------------------------------------
+
+
+# a function from \"mechkar\" package, written by Tomas
+getMissingness <- function (data, getRows = FALSE) {
+    require(dplyr)
+    l <- nrow(data)
+    vn <- names(data)
+    nadf <- data
+    cnt <- NULL
+    miss <- function(x) return(sum(is.na(x)))
+    for (n in vn) {
+        nadf[[n]] <- ifelse(is.na(nadf[[n]]) == T, 1, 0)
+        cnt <- rbind(cnt, data.frame(n, sum(nadf[[n]])))
+    }
+    names(cnt) <- c(\"var\", \"na.count\")
+    cnt$rate <- round((cnt$na.count/nrow(nadf)) * 100, 1)
+    nadf$na.cnt <- 0
+    nadf$na.cnt <- rowSums(nadf)
+    cnt <- cnt %>% dplyr::arrange(desc(na.count)) %>% dplyr::filter(na.count > 
+        0)
+    # count the rows that have no-missings at all
+    totmiss <- nadf %>% dplyr::filter(na.cnt == 0) %>% dplyr::tally()
+    idx <- NULL
+    msg <- (paste(\"This dataset has \", as.character(totmiss), 
+        \" (\", as.character(round(totmiss/nrow(data) * 100, 1)), 
+        \"%)\", \" complete rows. Original data has \", nrow(data), 
+        \" rows.\", sep = \"\"))
+    if (getRows == TRUE & totmiss != 0) {
+        # indexes of row numbers
+        nadf$rn <- seq_len(nrow(data))
+        # a vector of the full-missing rows indexes
+        idx <- nadf %>% dplyr::filter(na.cnt == 0) %>% dplyr::select(rn)
+    }
+    print(list(head(cnt, n = 10), msg))
+    return(list(missingness = cnt, message = msg, rows = idx$rn))
+}
+
+# ----------------------------------------------------------------------------
+
+# Cramer's v
+# 'y' doesn't necessarily have to be the outcome but any other variable
+# This function was taken from 'R-Bloggers'
+
+cv.test = function(x,y) {
+  dd = chisq.test(x, y, correct = FALSE)
+  cv = sqrt (dd$statistic / (length(x) * (min(length(unique(x)),
+    length(unique(y))) - 1)))
+  #print.noquote(\"Cramer V / phi:\")
+  return(cbind('Cramer V'=as.numeric(cv),'p-value'=dd$p.value))
+}
+```"

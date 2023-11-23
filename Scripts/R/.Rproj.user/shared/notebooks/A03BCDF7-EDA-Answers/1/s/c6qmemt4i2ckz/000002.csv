@@ -1,0 +1,10 @@
+"0","```r
+# 'corr.test' - correlation for a full matrix + p val
+# \"pairwise.complete.obs\" drops the rows with missings, only for the pair it calculates the correlation for, at the iteration, and not of the entire dataset.
+
+numlst <- names(movies_ff)[sapply(movies_ff, is.numeric)]
+dfcormat <- psych::corr.test(movies_ff[,numlst], use = \"pairwise.complete.obs\"
+                             , method = \"spearman\") 
+```"
+"1","Warning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zeroWarning: the standard deviation is zero
+"

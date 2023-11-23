@@ -1,0 +1,13 @@
+"0","```r
+pdf(\"./Graphs-before completion of data cleansing/boxplot_uni_graphs.pdf\")
+options(repr.plot.width = 8, repr.plot.height = 8)     # graph size
+par(mfrow=c(2,3))                                      # number of rows and columns at the graph
+for(v in numlst) {                                     # boxplot gets only numeric variables
+    boxplot(movies_ff[[v]],main=v)                     
+}
+par(mfrow=c(1,1))
+dev.off()
+```"
+"1","null device 
+          1 
+"

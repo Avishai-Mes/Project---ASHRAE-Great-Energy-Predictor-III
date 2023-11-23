@@ -1,0 +1,232 @@
+                                  
+                                   --------------------------------------------------------
+                                   ---   Generation of the Flat File - 'ff_train_agg'   ---
+                                   --------------------------------------------------------
+
+
+
+/* Now inport 'train_p_agg' and 'weather_train_p_agg' tables from the csv files that are in: 
+"C:\Users\Avishai\Documents\General\Personal\DS Course\Google drive content\Projects\
+Final project-ASHRAE-Great Energy Predictor III\Data\Tables_post_aggregation" */
+
+-- Make sure that 'time_range' column in 'train_p_agg' is an INTEGER, after importing, since if it's not, it resulted in problems later in the code
+
+-- Join 3 tables: train_p_agg, building_metadata_p, weather_train_p_agg
+CREATE TABLE ff_train_agg AS
+SELECT *
+FROM (train_p_agg AS a
+LEFT OUTER JOIN building_metadata_p AS b
+ON a.building_id = b.building_id) AS c
+LEFT OUTER JOIN weather_train_p_agg AS d
+-- 'timestamp' in 'train_p'  was originally local
+ON c.site_id = d.site_id AND c.date = d.date AND c.time_range = d.time_range 
+ORDER BY c.site_id ASC, c.building_id ASC, c.date ASC, c.time_range ASC;
+ 
+
+-- Feature Engineering
+ALTER TABLE ff_train_agg ADD COLUMN month INTEGER;
+ALTER TABLE ff_train_agg ADD COLUMN month_x REAL;
+ALTER TABLE ff_train_agg ADD COLUMN month_y REAL;
+ALTER TABLE ff_train_agg ADD COLUMN day_of_year INTEGER;
+ALTER TABLE ff_train_agg ADD COLUMN day_of_year_x REAL;
+ALTER TABLE ff_train_agg ADD COLUMN day_of_year_y REAL; 
+ALTER TABLE ff_train_agg ADD COLUMN day_of_week INTEGER; 
+ALTER TABLE ff_train_agg ADD COLUMN day_of_week_x REAL;
+ALTER TABLE ff_train_agg ADD COLUMN day_of_week_y REAL;
+--ALTER TABLE ff_train_agg ADD COLUMN hour INTEGER;  -- not relevant because of the 8-hour grouping will be performed later on
+--ALTER TABLE ff_train_agg ADD COLUMN hour_x REAL;   -- not relevant because of the 8-hour grouping will be performed later on
+--ALTER TABLE ff_train_agg ADD COLUMN hour_y REAL;   -- not relevant because of the 8-hour grouping will be performed later on
+ALTER TABLE ff_train_agg ADD COLUMN is_working_hours INTEGER;
+ALTER TABLE ff_train_agg ADD COLUMN is_weekend INTEGER;
+ALTER TABLE ff_train_agg ADD COLUMN season INTEGER;
+ALTER TABLE ff_train_agg ADD COLUMN season_x REAL;
+ALTER TABLE ff_train_agg ADD COLUMN season_y REAL;
+ALTER TABLE ff_train_agg ADD COLUMN is_holiday INTEGER; 
+
+
+-- Occupancy of the new features
+UPDATE ff_train_agg SET month = strftime('%m', date);
+UPDATE ff_train_agg SET month_x = ROUND(cos(2*pi()*month/12), 3);
+UPDATE ff_train_agg SET month_y = ROUND(sin(2*pi()*month/12), 3);
+UPDATE ff_train_agg SET day_of_year = strftime('%j', date);
+UPDATE ff_train_agg SET day_of_year_x = ROUND(cos(2*pi()*day_of_year/365), 3); 
+UPDATE ff_train_agg SET day_of_year_y = ROUND(sin(2*pi()*day_of_year/365), 3);
+UPDATE ff_train_agg SET day_of_week = strftime('%w', date);    -- '0' is Sun, '6' is Sat
+UPDATE ff_train_agg SET day_of_week_x = ROUND(cos(2*pi()*day_of_week/7), 3);
+UPDATE ff_train_agg SET day_of_week_y = ROUND(sin(2*pi()*day_of_week/7), 3);
+--UPDATE ff_train SET hour = strftime('%H', timestamp);         -- not relevant because of the 8-hour grouping will be performed later on
+--UPDATE ff_train SET hour_x = ROUND(cos(2*pi()*hour/24), 3);   -- not relevant because of the 8-hour grouping will be performed later on
+--UPDATE ff_train SET hour_y = ROUND(sin(2*pi()*hour/24), 3);   -- not relevant because of the 8-hour grouping will be performed later on
+UPDATE ff_train_agg SET is_working_hours = CASE WHEN time_range = 2 THEN 1
+                                                ELSE 0 END;
+UPDATE ff_train_agg SET is_weekend = CASE WHEN day_of_week = 6 THEN 1
+                                          WHEN day_of_week = 0 THEN 1
+                                          ELSE 0 END;
+UPDATE ff_train_agg SET season = CASE WHEN date <= date("2016-03-20") THEN 1
+                                      WHEN date BETWEEN date("2016-03-20") AND date("2016-06-21") THEN 2
+                                      WHEN date BETWEEN date("2016-06-21") AND date("2016-09-23") THEN 3
+                                      WHEN date BETWEEN date("2016-09-23") AND date("2016-12-21") THEN 4
+                                      WHEN date >= date("2016-12-21") THEN 1 END;
+UPDATE ff_train_agg SET season_x = ROUND(cos(2*pi()*season/4), 3);
+UPDATE ff_train_agg SET season_y = ROUND(sin(2*pi()*season/4), 3);
+UPDATE ff_train_agg SET is_holiday = 
+    CASE WHEN
+    -- USA
+    -- USA holiday dates
+    ((date = date("2016-01-01") OR 
+    date = date("2016-01-17") OR 
+    date = date("2016-02-21") OR 
+    date = date("2016-05-30") OR 
+    date = date("2016-07-04") OR 
+    date = date("2016-09-05") OR 
+    date = date("2016-10-10") OR 
+    date = date("2016-11-11") OR 
+    date = date("2016-11-24") OR 
+    date = date("2016-12-25")) AND 
+    -- USA sites
+    (site_id = 0 OR site_id = 2 OR site_id = 3 OR site_id = 4 OR site_id = 6 OR site_id = 8 OR site_id = 9 OR site_id = 10 OR site_id = 13 OR site_id = 14))
+    OR
+    -- UK
+    -- UK holiday dates
+    ((date = date("2016-01-03") OR 
+    date = date("2016-04-15") OR 
+    date = date("2016-04-18") OR 
+    date = date("2016-05-02") OR 
+    date = date("2016-05-30") OR 
+    date = date("2016-08-29") OR 
+    date = date("2016-12-26") OR 
+    date = date("2016-12-27")) AND 
+    -- UK sites
+    (site_id = 1 OR site_id = 5))
+    OR
+    -- Ireland
+    -- Irish holiday dates
+    ((date = date("2016-01-03") OR 
+    date = date("2016-03-17") OR 
+    date = date("2016-04-18") OR 
+    date = date("2016-05-02") OR 
+    date = date("2016-06-06") OR 
+    date = date("2016-08-08") OR 
+    date = date("2016-10-31") OR 
+    date = date("2016-12-25") OR 
+    date = date("2016-12-26")) AND 
+    -- Irish site
+    site_id = 12)
+    OR
+    -- Canada 
+    -- Canadian holiday dates
+    ((date = date("2016-01-01") OR 
+    date = date("2016-04-15") OR 
+    date = date("2016-04-18") OR 
+    date = date("2016-05-23") OR 
+    date = date("2016-07-01") OR 
+    date = date("2016-08-01") OR 
+    date = date("2016-09-05") OR 
+    date = date("2016-10-10") OR 
+    date = date("2016-11-11") OR 
+    date = date("2016-12-25") OR 
+    date = date("2016-12-26")) AND 
+    -- Canadian sites
+    (site_id = 7 OR site_id = 11))
+    THEN 1
+    ELSE 0 END;
+
+-- Drop columns from 'ff_train_agg'
+ALTER TABLE ff_train_agg DROP COLUMN time_range;             -- replaced by cosine and sine features
+ALTER TABLE ff_train_agg DROP COLUMN month;                  -- replaced by cosine and sine features
+ALTER TABLE ff_train_agg DROP COLUMN day_of_year;            -- replaced by cosine and sine features
+ALTER TABLE ff_train_agg DROP COLUMN day_of_week;            -- replaced by cosine and sine features
+--ALTER TABLE ff_train_agg DROP COLUMN hour;                 -- not relevant because of the 8-hour grouping will be performed later on
+--ALTER TABLE ff_train_agg DROP COLUMN hour_x;               -- not relevant because of the 8-hour grouping will be performed later on
+--ALTER TABLE ff_train_agg DROP COLUMN hour_y;               -- not relevant because of the 8-hour grouping will be performed later on
+ALTER TABLE ff_train_agg DROP COLUMN season;                 -- replaced by cosine and sine features
+ALTER TABLE ff_train_agg DROP COLUMN "building_id:1";        -- duplicated column
+ALTER TABLE ff_train_agg DROP COLUMN "site_id:1";            -- duplicated column
+ALTER TABLE ff_train_agg DROP COLUMN "date:1";               -- duplicated column
+ALTER TABLE ff_train_agg DROP COLUMN "time_range:1";         -- duplicated column
+ALTER TABLE ff_train_agg DROP COLUMN "time_range_x_mode:1";  -- duplicated column
+ALTER TABLE ff_train_agg DROP COLUMN "time_range_y_mode:1";  -- duplicated column
+
+
+
+
+
+-- Determine the order of the columns at 'ff_train_agg'
+CREATE TABLE ff_train_agg_reordered AS
+SELECT
+       site_id,
+       building_id,
+       date,
+       time_range_x_mode,
+       time_range_y_mode,
+       meter_reading_sum,
+       precip_depth_sum,
+       precip_depth_min,
+       precip_depth_max,
+       precip_depth_sd,
+       air_temperature_mean,
+       air_temperature_min,
+       air_temperature_max,
+       air_temperature_sd,
+       dew_temperature_mean,
+       dew_temperature_min,
+       dew_temperature_max,
+       dew_temperature_sd,
+       sea_level_pressure_mean,
+       sea_level_pressure_min,
+       sea_level_pressure_max,
+       sea_level_pressure_sd,
+       wind_speed_mean,
+       wind_speed_min,
+       wind_speed_max,
+       wind_speed_sd,
+       rel_humid_mean,
+       rel_humid_min,
+       rel_humid_max,
+       rel_humid_sd,
+       cloud_coverage_mode,
+       cloud_coverage_min,
+       cloud_coverage_max,
+       cloud_coverage_sd,
+       elevation_mode,
+       square_feet,
+       year_built,
+       floor_count,
+       sw_primary_use_Education,
+       sw_primary_use_Entertainment_publicAssembly,
+       sw_primary_use_FoodSalesAndService,
+       sw_primary_use_Healthcare,
+       sw_primary_use_Lodging_residential,
+       sw_primary_use_Manufacturing_industrial,
+       sw_primary_use_Office,
+       sw_primary_use_Other,
+       sw_primary_use_Parking,
+       sw_primary_use_PublicServices,
+       sw_primary_use_ReligiousWorship,
+       sw_primary_use_Retail,
+       sw_primary_use_TechnologyScience,
+       sw_primary_use_Utility,
+       is_working_hours,
+       is_weekend,
+       is_holiday,
+       wind_direction_x_mode,
+       wind_direction_y_mode,
+       month_x,
+       month_y,
+       day_of_year_x,
+       day_of_year_y,
+       day_of_week_x,
+       day_of_week_y,
+       season_x,
+       season_y
+FROM ff_train_agg;
+
+-- Drop the original table
+DROP TABLE ff_train_agg;
+
+-- Rename the new table to the original table's name
+ALTER TABLE ff_train_agg_reordered RENAME TO ff_train_agg;
+
+
+-- Now export 'ff_train_agg' dataset to Check point 1:
+

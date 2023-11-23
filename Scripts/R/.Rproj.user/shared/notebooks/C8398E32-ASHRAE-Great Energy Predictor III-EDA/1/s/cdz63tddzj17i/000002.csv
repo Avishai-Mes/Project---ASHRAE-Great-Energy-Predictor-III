@@ -1,0 +1,10 @@
+"0","```r
+# Get the column names of trainset dataset
+col_names <- colnames(trainset)
+
+# Create a data frame with the column names
+df <- data.frame(col_names)
+
+# Export the data frame with the column names to an Excel file
+write_xlsx(df, \"C:/Users/Avishai/Documents/General/Personal/DS Course/Google drive content/Projects/Final project-ASHRAE-Great Energy Predictor III/Excel files/column_names.xlsx\")
+```"

@@ -1,0 +1,11 @@
+"0","```r
+res3 <- data.frame(res3)
+res3 <- res3 %>% filter(distribution_changed==\"+\")
+mnar <- unique(res3$missing)
+mnar
+```"
+"1"," [1] \"actor1_prev_revenue\"    \"actor2_prev_revenue\"    \"actor0_prev_revenue\"    \"producers_5y_cnt\"       \"producers_cnt\"         
+ [6] \"producers_5y_revenue\"   \"actors_5y_revenue\"      \"depart_Directing_ratio\" \"director_movies_cnt\"    \"actor2_movies_cnt\"     
+[11] \"actor0_movies_3y_cnt\"   \"depart_Directing\"       \"actor1_movies_3y_cnt\"   \"depart_Crew_ratio\"      \"depart_Writing_ratio\"  
+[16] \"sw_female_actor0\"       \"sw_male_actor0\"        
+"

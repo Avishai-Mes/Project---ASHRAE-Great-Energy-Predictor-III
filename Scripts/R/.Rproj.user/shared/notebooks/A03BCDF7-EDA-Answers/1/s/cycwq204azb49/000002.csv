@@ -1,0 +1,4 @@
+"0","```r
+ggplot2::ggplot(data=movies_ff,aes(x=revenue)) +
+  geom_density()
+```"

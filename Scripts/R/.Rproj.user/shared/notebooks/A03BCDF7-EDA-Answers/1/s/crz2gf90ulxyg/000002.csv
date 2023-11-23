@@ -1,0 +1,116 @@
+"0","```r
+summary(movies_ff)
+```"
+"1","    movie_id          budget          original_language    popularity       release_date           runtime      runtime_cat       
+ Min.   :   1.0   Min.   :        0   Length:3000        Min.   :  0.000   Min.   :1921-01-21   Min.   :  0.0   Length:3000       
+ 1st Qu.: 750.8   1st Qu.:        0   Class :character   1st Qu.:  4.018   1st Qu.:1993-03-05   1st Qu.: 94.0   Class :character  
+ Median :1500.5   Median :  8000000   Mode  :character   Median :  7.375   Median :2004-06-07   Median :104.0   Mode  :character  
+ Mean   :1500.5   Mean   : 22531334                      Mean   :  8.463   Mean   :2000-03-25   Mean   :107.9                     
+ 3rd Qu.:2250.2   3rd Qu.: 29000000                      3rd Qu.: 10.891   3rd Qu.:2011-06-24   3rd Qu.:118.0                     
+ Max.   :3000.0   Max.   :380000000                      Max.   :294.337   Max.   :2017-07-20   Max.   :338.0                     
+                                                                                                NA's   :2                         
+    revenue            sw_lang_en     sw_web_presence  sw_has_poster      sw_tagline     keyword_cnt      release_month    high_release_month
+ Min.   :1.000e+00   Min.   :0.0000   Min.   :0.0000   Min.   :0.0000   Min.   :0.000   Min.   :  0.000   Min.   : 1.000   Min.   :0.000     
+ 1st Qu.:2.380e+06   1st Qu.:1.0000   1st Qu.:0.0000   1st Qu.:1.0000   1st Qu.:1.000   1st Qu.:  3.000   1st Qu.: 4.000   1st Qu.:0.000     
+ Median :1.681e+07   Median :1.0000   Median :0.0000   Median :1.0000   Median :1.000   Median :  6.000   Median : 7.000   Median :0.000     
+ Mean   :6.673e+07   Mean   :0.8583   Mean   :0.3153   Mean   :0.9997   Mean   :0.801   Mean   :  7.227   Mean   : 6.775   Mean   :0.396     
+ 3rd Qu.:6.892e+07   3rd Qu.:1.0000   3rd Qu.:1.0000   3rd Qu.:1.0000   3rd Qu.:1.000   3rd Qu.: 10.000   3rd Qu.:10.000   3rd Qu.:1.000     
+ Max.   :1.520e+09   Max.   :1.0000   Max.   :1.0000   Max.   :1.0000   Max.   :1.000   Max.   :149.000   Max.   :12.000   Max.   :1.000     
+                                                                                                                                             
+  release_day    sw_collection    producers_cnt    countries_cnt      lang_US          lang_FR         lang_RU           lang_ES       
+ Min.   : 1.00   Min.   : 0.000   Min.   : 1.000   Min.   :0.000   Min.   :0.0000   Min.   :0.000   Min.   :0.00000   Min.   :0.00000  
+ 1st Qu.: 8.00   1st Qu.: 1.000   1st Qu.: 1.000   1st Qu.:1.000   1st Qu.:1.0000   1st Qu.:0.000   1st Qu.:0.00000   1st Qu.:0.00000  
+ Median :15.00   Median : 2.000   Median : 2.000   Median :1.000   Median :1.0000   Median :0.000   Median :0.00000   Median :0.00000  
+ Mean   :15.05   Mean   : 2.699   Mean   : 2.856   Mean   :1.326   Mean   :0.8727   Mean   :0.096   Mean   :0.05067   Mean   :0.07967  
+ 3rd Qu.:22.00   3rd Qu.: 4.000   3rd Qu.: 4.000   3rd Qu.:1.000   3rd Qu.:1.0000   3rd Qu.:0.000   3rd Qu.:0.00000   3rd Qu.:0.00000  
+ Max.   :31.00   Max.   :17.000   Max.   :17.000   Max.   :8.000   Max.   :1.0000   Max.   :1.000   Max.   :1.00000   Max.   :1.00000  
+                                  NA's   :592                                                                                          
+    lang_JA        actor0_movies_cnt actor0_movies_3y_cnt actor1_movies_cnt actor1_movies_3y_cnt actor2_movies_cnt actor2_movies_3y_cnt
+ Min.   :0.00000   Min.   : 0.000    Min.   :0.0000       Min.   : 0.000    Min.   :0.0000       Min.   : 0.000    Min.   :0.000       
+ 1st Qu.:0.00000   1st Qu.: 0.000    1st Qu.:0.0000       1st Qu.: 0.000    1st Qu.:0.0000       1st Qu.: 0.000    1st Qu.:0.000       
+ Median :0.00000   Median : 2.000    Median :0.0000       Median : 1.000    Median :0.0000       Median : 1.000    Median :0.000       
+ Mean   :0.02967   Mean   : 3.514    Mean   :0.8327       Mean   : 2.636    Mean   :0.6733       Mean   : 2.364    Mean   :0.619       
+ 3rd Qu.:0.00000   3rd Qu.: 5.000    3rd Qu.:1.0000       3rd Qu.: 4.000    3rd Qu.:1.0000       3rd Qu.: 3.000    3rd Qu.:1.000       
+ Max.   :1.00000   Max.   :28.000    Max.   :7.0000       Max.   :29.000    Max.   :6.0000       Max.   :29.000    Max.   :9.000       
+                                                                                                                                       
+ sw_female_actor0 sw_female_actor1 sw_female_actor2 sw_male_actor0   sw_male_actor1   sw_male_actor2   actor0_prev_revenue actor1_prev_revenue
+ Min.   :0.0000   Min.   :0.0000   Min.   :0.0000   Min.   :0.0000   Min.   :0.0000   Min.   :0.0000   Min.   :2.000e+00   Min.   :1.000e+00  
+ 1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:4.623e+07   1st Qu.:3.423e+07  
+ Median :0.0000   Median :0.0000   Median :0.0000   Median :1.0000   Median :1.0000   Median :1.0000   Median :1.515e+08   Median :1.177e+08  
+ Mean   :0.2345   Mean   :0.3717   Mean   :0.3322   Mean   :0.6985   Mean   :0.5253   Mean   :0.5448   Mean   :2.207e+08   Mean   :1.996e+08  
+ 3rd Qu.:0.0000   3rd Qu.:1.0000   3rd Qu.:1.0000   3rd Qu.:1.0000   3rd Qu.:1.0000   3rd Qu.:1.0000   3rd Qu.:3.095e+08   3rd Qu.:2.607e+08  
+ Max.   :1.0000   Max.   :1.0000   Max.   :1.0000   Max.   :1.0000   Max.   :1.0000   Max.   :1.0000   Max.   :1.520e+09   Max.   :1.520e+09  
+ NA's   :151      NA's   :70       NA's   :74       NA's   :151      NA's   :70       NA's   :74       NA's   :934         NA's   :1157       
+ actor2_prev_revenue director_movies_cnt director_movies_3y_cnt genre_adventure  genre_fantasy     genre_animation    genre_drama    
+ Min.   :1.000e+00   Min.   : 0.000      Min.   :0.0000         Min.   :0.0000   Min.   :0.00000   Min.   :0.00000   Min.   :0.0000  
+ 1st Qu.:3.320e+07   1st Qu.: 0.000      1st Qu.:0.0000         1st Qu.:0.0000   1st Qu.:0.00000   1st Qu.:0.00000   1st Qu.:0.0000  
+ Median :1.164e+08   Median : 0.000      Median :0.0000         Median :0.0000   Median :0.00000   Median :0.00000   Median :1.0000  
+ Mean   :1.958e+08   Mean   : 0.771      Mean   :0.1493         Mean   :0.1467   Mean   :0.07751   Mean   :0.04711   Mean   :0.5115  
+ 3rd Qu.:2.451e+08   3rd Qu.: 1.000      3rd Qu.:0.0000         3rd Qu.:0.0000   3rd Qu.:0.00000   3rd Qu.:0.00000   3rd Qu.:1.0000  
+ Max.   :1.520e+09   Max.   :10.000      Max.   :2.0000         Max.   :1.0000   Max.   :1.00000   Max.   :1.00000   Max.   :1.0000  
+ NA's   :1245                                                   NA's   :7        NA's   :7         NA's   :7         NA's   :7       
+  genre_horror     genre_action     genre_comedy    genre_history    genre_western     genre_thriller    genre_crime     genre_documentary
+ Min.   :0.0000   Min.   :0.0000   Min.   :0.0000   Min.   :0.0000   Min.   :0.00000   Min.   :0.0000   Min.   :0.0000   Min.   :0.00000  
+ 1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.00000   1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.00000  
+ Median :0.0000   Median :0.0000   Median :0.0000   Median :0.0000   Median :0.00000   Median :0.0000   Median :0.0000   Median :0.00000  
+ Mean   :0.1006   Mean   :0.2476   Mean   :0.3435   Mean   :0.0441   Mean   :0.01437   Mean   :0.2636   Mean   :0.1567   Mean   :0.02907  
+ 3rd Qu.:0.0000   3rd Qu.:0.0000   3rd Qu.:1.0000   3rd Qu.:0.0000   3rd Qu.:0.00000   3rd Qu.:1.0000   3rd Qu.:0.0000   3rd Qu.:0.00000  
+ Max.   :1.0000   Max.   :1.0000   Max.   :1.0000   Max.   :1.0000   Max.   :1.00000   Max.   :1.0000   Max.   :1.0000   Max.   :1.00000  
+ NA's   :7        NA's   :7        NA's   :7        NA's   :7        NA's   :7         NA's   :7        NA's   :7        NA's   :7        
+ genre_science_fiction genre_mystery      genre_music      genre_romance     genre_family       genre_war       genre_foreign    
+ Min.   :0.00000       Min.   :0.00000   Min.   :0.00000   Min.   :0.0000   Min.   :0.00000   Min.   :0.00000   Min.   :0.00000  
+ 1st Qu.:0.00000       1st Qu.:0.00000   1st Qu.:0.00000   1st Qu.:0.0000   1st Qu.:0.00000   1st Qu.:0.00000   1st Qu.:0.00000  
+ Median :0.00000       Median :0.00000   Median :0.00000   Median :0.0000   Median :0.00000   Median :0.00000   Median :0.00000  
+ Mean   :0.09689       Mean   :0.07518   Mean   :0.03341   Mean   :0.1908   Mean   :0.08687   Mean   :0.03341   Mean   :0.01036  
+ 3rd Qu.:0.00000       3rd Qu.:0.00000   3rd Qu.:0.00000   3rd Qu.:0.0000   3rd Qu.:0.00000   3rd Qu.:0.00000   3rd Qu.:0.00000  
+ Max.   :1.00000       Max.   :1.00000   Max.   :1.00000   Max.   :1.0000   Max.   :1.00000   Max.   :1.00000   Max.   :1.00000  
+ NA's   :7             NA's   :7         NA's   :7         NA's   :7        NA's   :7         NA's   :7         NA's   :7        
+   depart_Art     depart_Camera     depart_Crew      depart_Custom_Mkup depart_Directing depart_Editing   depart_Lighting   depart_Production
+ Min.   : 0.000   Min.   : 0.000   Min.   :  0.000   Min.   : 0.000     Min.   : 1.00    Min.   : 0.000   Min.   : 0.0000   Min.   : 0.000   
+ 1st Qu.: 0.000   1st Qu.: 0.000   1st Qu.:  0.000   1st Qu.: 0.000     1st Qu.: 1.00    1st Qu.: 0.000   1st Qu.: 0.0000   1st Qu.: 1.000   
+ Median : 1.000   Median : 1.000   Median :  0.000   Median : 1.000     Median : 1.00    Median : 1.000   Median : 0.0000   Median : 4.000   
+ Mean   : 2.704   Mean   : 1.818   Mean   :  2.451   Mean   : 2.063     Mean   : 1.66    Mean   : 1.511   Mean   : 0.4367   Mean   : 5.324   
+ 3rd Qu.: 3.000   3rd Qu.: 2.000   3rd Qu.:  2.000   3rd Qu.: 2.000     3rd Qu.: 2.00    3rd Qu.: 2.000   3rd Qu.: 0.0000   3rd Qu.: 8.000   
+ Max.   :28.000   Max.   :23.000   Max.   :119.000   Max.   :33.000     Max.   :30.00    Max.   :14.000   Max.   :12.0000   Max.   :34.000   
+ NA's   :16       NA's   :16       NA's   :16        NA's   :16         NA's   :16       NA's   :16       NA's   :16        NA's   :16       
+  depart_Sound    depart_Visual_Effects depart_Writing   depart_Art_female depart_Camera_female depart_Crew_female depart_Custom_Mkup_female
+ Min.   : 0.000   Min.   : 0.000        Min.   : 0.000   Min.   :0.0000    Min.   :0.00000      Min.   : 0.00000   Min.   :0.0000           
+ 1st Qu.: 1.000   1st Qu.: 0.000        1st Qu.: 1.000   1st Qu.:0.0000    1st Qu.:0.00000      1st Qu.: 0.00000   1st Qu.:0.0000           
+ Median : 1.000   Median : 0.000        Median : 2.000   Median :0.0000    Median :0.00000      Median : 0.00000   Median :0.0000           
+ Mean   : 3.123   Mean   : 1.203        Mean   : 2.201   Mean   :0.2443    Mean   :0.02178      Mean   : 0.06434   Mean   :0.3599           
+ 3rd Qu.: 3.000   3rd Qu.: 0.000        3rd Qu.: 3.000   3rd Qu.:0.0000    3rd Qu.:0.00000      3rd Qu.: 0.00000   3rd Qu.:1.0000           
+ Max.   :31.000   Max.   :52.000        Max.   :20.000   Max.   :6.0000    Max.   :3.00000      Max.   :10.00000   Max.   :6.0000           
+ NA's   :16       NA's   :16            NA's   :16       NA's   :16        NA's   :16           NA's   :16         NA's   :16               
+ depart_Directing_female depart_Editing_female depart_Lighting_female depart_Production_female depart_Sound_female depart_Visual_Effects_female
+ Min.   :0.0000          Min.   :0.0000        Min.   :0.00000        Min.   : 0.0000          Min.   :0.00000     Min.   :0.000000            
+ 1st Qu.:0.0000          1st Qu.:0.0000        1st Qu.:0.00000        1st Qu.: 0.0000          1st Qu.:0.00000     1st Qu.:0.000000            
+ Median :0.0000          Median :0.0000        Median :0.00000        Median : 0.0000          Median :0.00000     Median :0.000000            
+ Mean   :0.1555          Mean   :0.1287        Mean   :0.00134        Mean   : 0.9578          Mean   :0.08043     Mean   :0.007373            
+ 3rd Qu.:0.0000          3rd Qu.:0.0000        3rd Qu.:0.00000        3rd Qu.: 2.0000          3rd Qu.:0.00000     3rd Qu.:0.000000            
+ Max.   :3.0000          Max.   :5.0000        Max.   :1.00000        Max.   :12.0000          Max.   :3.00000     Max.   :1.000000            
+ NA's   :16              NA's   :16            NA's   :16             NA's   :16               NA's   :16          NA's   :16                  
+ depart_Writing_female producers_5y_cnt producers_5y_revenue director_5y_cnt  directors_5y_revenue  actor_5y_cnt   actors_5y_revenue  
+ Min.   :0.0000        Min.   : 0.000   Min.   :0.000e+00    Min.   :0.0000   Min.   :0.000e+00    Min.   :0.000   Min.   :0.000e+00  
+ 1st Qu.:0.0000        1st Qu.: 0.000   1st Qu.:0.000e+00    1st Qu.:0.0000   1st Qu.:0.000e+00    1st Qu.:0.000   1st Qu.:0.000e+00  
+ Median :0.0000        Median : 4.000   Median :2.146e+08    Median :0.0000   Median :0.000e+00    Median :1.000   Median :2.362e+07  
+ Mean   :0.1277        Mean   : 8.313   Mean   :9.614e+08    Mean   :0.2725   Mean   :2.891e+07    Mean   :1.411   Mean   :1.712e+08  
+ 3rd Qu.:0.0000        3rd Qu.:13.000   3rd Qu.:1.132e+09    3rd Qu.:0.0000   3rd Qu.:0.000e+00    3rd Qu.:2.000   3rd Qu.:1.942e+08  
+ Max.   :3.0000        Max.   :61.000   Max.   :1.378e+10    Max.   :4.0000   Max.   :1.960e+09    Max.   :9.000   Max.   :3.905e+09  
+ NA's   :16            NA's   :592      NA's   :592          NA's   :16       NA's   :16           NA's   :151     NA's   :151        
+   crew_size     depart_Directing_ratio depart_Art_ratio  depart_Writing_ratio depart_Sound_ratio depart_Crew_ratio depart_Custom_Mkup_ratio
+ Min.   :  1.0   Min.   :0.010          Min.   :0.00000   Min.   :0.0000       Min.   :0.00000    Min.   :0.00000   Min.   :0.00000         
+ 1st Qu.:  8.0   1st Qu.:0.060          1st Qu.:0.00000   1st Qu.:0.0600       1st Qu.:0.03000    1st Qu.:0.00000   1st Qu.:0.00000         
+ Median : 15.0   Median :0.090          Median :0.07000   Median :0.1300       Median :0.09000    Median :0.00000   Median :0.03000         
+ Mean   : 24.5   Mean   :0.153          Mean   :0.07848   Mean   :0.1826       Mean   :0.09862    Mean   :0.04952   Mean   :0.05381         
+ 3rd Qu.: 29.0   3rd Qu.:0.150          3rd Qu.:0.13000   3rd Qu.:0.2500       3rd Qu.:0.14000    3rd Qu.:0.08000   3rd Qu.:0.09000         
+ Max.   :194.0   Max.   :1.000          Max.   :0.40000   Max.   :0.8300       Max.   :0.56000    Max.   :0.75000   Max.   :0.60000         
+ NA's   :16      NA's   :16             NA's   :16        NA's   :16           NA's   :16         NA's   :16        NA's   :16              
+ depart_Visual_Effects_ratio depart_Production_ratio depart_Camera_ratio depart_Lighting_ratio depart_Editing_ratio
+ Min.   :0.00000             Min.   :0.0000          Min.   :0.00000     Min.   :0.00000       Min.   :0.00000     
+ 1st Qu.:0.00000             1st Qu.:0.1000          1st Qu.:0.00000     1st Qu.:0.00000       1st Qu.:0.00000     
+ Median :0.00000             Median :0.2050          Median :0.06000     Median :0.00000       Median :0.06000     
+ Mean   :0.02274             Mean   :0.2263          Mean   :0.06656     Mean   :0.00627       Mean   :0.06339     
+ 3rd Qu.:0.00000             3rd Qu.:0.3300          3rd Qu.:0.10000     3rd Qu.:0.00000       3rd Qu.:0.09000     
+ Max.   :0.80000             Max.   :0.8300          Max.   :0.50000     Max.   :0.12000       Max.   :0.50000     
+ NA's   :16                  NA's   :16              NA's   :16          NA's   :16            NA's   :16          
+"

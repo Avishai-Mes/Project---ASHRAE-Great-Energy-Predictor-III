@@ -1,0 +1,27 @@
+"0","```r
+# This code takes a long time to run
+pdf(\"./Graphs-before completion of data cleansing/missing_generation_graph.pdf\", 
+    onefile = T)
+options(repr.plot.width = 20, repr.plot.height = 20)
+for (m in mm$missingness$var) {
+  i <- 1
+  p <- list()
+  for (v in numlst) {
+    if (v != m) {
+      ff <- data.frame(v=movies_ff[[v]],m=factor(movies_ff_na[[m]]))
+      p[[i]] <- suppressMessages(ggplot(data=ff, aes(x=v,group=m,color=m)) + 
+        geom_density()+labs(title=paste(\"miss=\", m),x =v)+theme(plot.title = 
+          element_text(size = 10), axis.text.x = element_text(size = 5), 
+          axis.title.y = element_blank()))
+      i <- i + 1
+    }
+  }
+  for (i in sequence(ceiling(length(p)/9))) {
+  do.call(\"grid.arrange\", p[i+1:9*i])
+}
+}
+dev.off()
+```"
+"1","null device 
+          1 
+"

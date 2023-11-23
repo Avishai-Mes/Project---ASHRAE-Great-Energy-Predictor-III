@@ -1,0 +1,26 @@
+"0","```r
+pdf(\"./Graphs-before completion of data cleansing/scatter outliers graphs.pdf\")
+options(repr.plot.width = 8, repr.plot.height = 8)
+par(mfrow=c(3,2))
+outmat <- outlierMatrix(movies_ff)
+outmat_temp <- outmat
+outmat_temp[is.na(outmat_temp)] <- 0  # For NA's not to be considered as outliers 
+# choose numeric columns that have outliers in them (sum != 0)
+outmat_temp <- outmat_temp %>% select_if(~!is.numeric(.) || sum(.) != 0)  
+dist_changed_list <- names(outmat_temp)
+
+for(n in dist_changed_list){
+  n_out <- movies_ff[[n]]
+  n_non <- movies_ff[[n]][which(outmat[[n]]==0)]
+  revenue_out <- movies_ff$revenue
+  revenue_non <- revenue_out[which(outmat[[n]]==0)]
+  outdf <- data.frame(x_out=n_out,y_out=revenue_out)
+  nondf <- data.frame(x_non=n_non,y_non=revenue_non)
+  scatter.smooth(outdf$y_out ~ outdf$x_out, xlab=n, family=\"symmetric\")
+  scatter.smooth(nondf$y_non ~ nondf$x_non, xlab=n, family=\"symmetric\")
+}
+dev.off()
+```"
+"1","null device 
+          1 
+"

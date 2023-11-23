@@ -1,0 +1,17 @@
+"0","```r
+cats_corr <- NULL
+for (n1 in catlst){
+  for (n2 in catlst){
+    if (n1 != n2) {
+      cats_corr <- rbind(cats_corr, cbind(n1, n2, (cv.test(movies_ff[[n1]], 
+        movies_ff[[n2]]))))
+    }
+  }
+}
+```"
+"1","Warning: Chi-squared approximation may be incorrectWarning: Chi-squared approximation may be incorrectWarning: Chi-squared approximation may be incorrectWarning: Chi-squared approximation may be incorrectWarning: Chi-squared approximation may be incorrectWarning: Chi-squared approximation may be incorrectWarning: Chi-squared approximation may be incorrectWarning: Chi-squared approximation may be incorrect
+"
+"0","```r
+cats_corr <- data.frame(cats_corr)
+cats_corr
+```"
